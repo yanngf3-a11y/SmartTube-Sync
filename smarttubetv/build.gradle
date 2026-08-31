@@ -247,4 +247,7 @@ dependencies {
 
     // ByeByeDPI fix
     implementation 'org.conscrypt:conscrypt-android:' + conscryptVersion
+
+    // === SmartTube Sync: sincronización de reproducción entre pantallas ===
+    implementation 'org.java-websocket:Java-WebSocket:1.5.3'
 }
