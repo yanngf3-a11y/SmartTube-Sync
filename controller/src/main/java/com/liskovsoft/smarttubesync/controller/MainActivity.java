@@ -1,16 +1,15 @@
 package com.liskovsoft.smarttubesync.controller;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
-import androidx.appcompat.app.AppCompatActivity;
-
 import java.util.Arrays;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements ScreenConnection.StatusListener {
+public class MainActivity extends Activity implements ScreenConnection.StatusListener {
 
     private EditText mIp1, mIp2, mIp3, mIp4, mIp5, mVideoIdInput;
     private TextView mStatusText;
