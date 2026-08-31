@@ -1,0 +1,22 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Direcciones IP de las pantallas (una por línea de texto):" android:textStyle="bold" android:paddingBottom="8dp"/>
+<EditText android:id="@+id/ipScreen1" android:hint="IP Pantalla 1 (ej. 192.168.1.10)" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text"/>
+<EditText android:id="@+id/ipScreen2" android:hint="IP Pantalla 2" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text"/>
+<EditText android:id="@+id/ipScreen3" android:hint="IP Pantalla 3" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text"/>
+<EditText android:id="@+id/ipScreen4" android:hint="IP Pantalla 4" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text"/>
+<EditText android:id="@+id/ipScreen5" android:hint="IP Pantalla 5" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text"/>
+<EditText android:id="@+id/videoIdInput" android:hint="ID del video de YouTube (ej. dQw4w9WgXcQ)" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:inputType="text"/>
+<Button android:id="@+id/btnOpen" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Abrir video en todas las pantallas" android:layout_marginTop="8dp"/>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="16dp">
+<Button android:id="@+id/btnPlay" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Play"/>
+<Button android:id="@+id/btnPause" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Pausa"/>
+</LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+<Button android:id="@+id/btnPrevious" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Anterior"/>
+<Button android:id="@+id/btnNext" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Siguiente"/>
+</LinearLayout>
+<Button android:id="@+id/btnSync" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Forzar sincronización ahora" android:layout_marginTop="16dp"/>
+<TextView android:id="@+id/statusText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Estado: listo" android:textSize="12sp"/>
+</LinearLayout>
+</ScrollView>
