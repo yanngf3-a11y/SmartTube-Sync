@@ -44,6 +44,13 @@ jobs:
       - name: Grant Gradle permissions
         run: chmod +x gradlew
 
+      - name: Diagnose Controller Module
+        run: |
+          echo "=== Proyectos reconocidos por Gradle ==="
+          ./gradlew projects
+          echo "=== Tareas disponibles en :controller ==="
+          ./gradlew :controller:tasks --all
+
       - name: Lint with Gradle
         run: ./gradlew lintStbetaRelease
 
