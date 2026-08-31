@@ -58,6 +58,9 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew clean assembleStbetaRelease
 
+      - name: Build Sync Controller APK
+        run: ./gradlew :controller:assembleDebug
+
       - name: VirusTotal Scan
         if: ${{ env.HAS_VT_KEY == 'true' }}
         id: vt
@@ -115,4 +118,11 @@ jobs:
         with:
           name: SmartTube_${{ steps.get_version.outputs.VERSION_NAME }}_x86
           path: ./smarttubetv/build/outputs/apk/stbeta/release/*_x86.apk
+          if-no-files-found: error
+
+      - name: Upload Sync Controller APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: SmartTubeSync_Controller_debug
+          path: ./controller/build/outputs/apk/debug/*.apk
           if-no-files-found: error
