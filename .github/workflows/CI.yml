@@ -44,13 +44,6 @@ jobs:
       - name: Grant Gradle permissions
         run: chmod +x gradlew
 
-      - name: Diagnose Controller Module
-        run: |
-          echo "=== Proyectos reconocidos por Gradle ==="
-          ./gradlew projects
-          echo "=== Tareas disponibles en :controller ==="
-          ./gradlew :controller:tasks --all
-
       - name: Lint with Gradle
         run: ./gradlew lintStbetaRelease
 
@@ -64,6 +57,9 @@ jobs:
 
       - name: Build with Gradle
         run: ./gradlew clean assembleStbetaRelease
+
+      - name: Build Debug (auto-signed, para pruebas de instalacion)
+        run: ./gradlew assembleStbetaDebug
 
       - name: Build Sync Controller APK
         run: ./gradlew :controller:assembleDebug
@@ -132,4 +128,11 @@ jobs:
         with:
           name: SmartTubeSync_Controller_debug
           path: ./controller/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload SmartTube DEBUG APK (auto-firmado, instalable sin secrets)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: SmartTube_${{ steps.get_version.outputs.VERSION_NAME }}_DEBUG_universal
+          path: ./smarttubetv/build/outputs/apk/stbeta/debug/*_universal.apk
           if-no-files-found: error
