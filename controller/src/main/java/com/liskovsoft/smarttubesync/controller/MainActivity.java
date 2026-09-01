@@ -2,6 +2,8 @@ package com.liskovsoft.smarttubesync.controller;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -14,6 +16,8 @@ public class MainActivity extends Activity implements ScreenConnection.StatusLis
     private EditText mIp1, mIp2, mIp3, mIp4, mIp5, mVideoIdInput;
     private TextView mStatusText;
     private ScreenGroup mScreenGroup;
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private boolean mConnected = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,13 +42,23 @@ public class MainActivity extends Activity implements ScreenConnection.StatusLis
         Button btnSync = findViewById(R.id.btnSync);
 
         btnOpen.setOnClickListener(v -> {
-            connectToConfiguredScreens();
             String videoId = mVideoIdInput.getText().toString().trim();
-            if (!videoId.isEmpty()) {
+            if (videoId.isEmpty()) {
+                appendStatus("Escribe un ID de video primero");
+                return;
+            }
+
+            if (!mConnected) {
+                // Primera vez: conecta y espera un momento antes de mandar el comando,
+                // para darle tiempo al WebSocket de terminar el handshake.
+                connectToConfiguredScreens();
+                mHandler.postDelayed(() -> {
+                    mScreenGroup.openVideo(videoId);
+                    appendStatus("Comando 'abrir video' enviado: " + videoId);
+                }, 1500);
+            } else {
                 mScreenGroup.openVideo(videoId);
                 appendStatus("Comando 'abrir video' enviado: " + videoId);
-            } else {
-                appendStatus("Escribe un ID de video primero");
             }
         });
 
@@ -85,6 +99,7 @@ public class MainActivity extends Activity implements ScreenConnection.StatusLis
                 mIp5.getText().toString()
         );
         mScreenGroup.connectAll(ips);
+        mConnected = true;
         appendStatus("Conectando a las pantallas configuradas...");
     }
 
@@ -103,5 +118,6 @@ public class MainActivity extends Activity implements ScreenConnection.StatusLis
         if (mScreenGroup != null) {
             mScreenGroup.disconnectAll();
         }
+        mConnected = false;
     }
 }
