@@ -225,14 +225,73 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
                 videoId == null ||
                 videoId.trim().isEmpty()
         ) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync LOAD_VIDEO: videoId vacío"
+            );
+
             return;
         }
 
-        String cleanVideoId = videoId.trim();
+        final String cleanVideoId =
+                videoId.trim();
 
-        if (mPlaybackPresenter != null) {
-            mPlaybackPresenter.openVideo(cleanVideoId);
+        Log.d(
+                TAG,
+                "YG Sync LOAD_VIDEO recibido: "
+                        + cleanVideoId
+        );
+
+        if (mPlaybackPresenter == null) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync LOAD_VIDEO: PlaybackPresenter todavía no está listo"
+            );
+
+            return;
         }
+
+        if (getActivity() == null) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync LOAD_VIDEO: Activity todavía no está disponible"
+            );
+
+            return;
+        }
+
+        getActivity().runOnUiThread(
+                () -> {
+
+                    Log.d(
+                            TAG,
+                            "YG Sync LOAD_VIDEO ejecutando openVideo: "
+                                    + cleanVideoId
+                    );
+
+                    if (mPlaybackPresenter == null) {
+
+                        Log.e(
+                                TAG,
+                                "YG Sync LOAD_VIDEO: PlaybackPresenter es null al ejecutar"
+                        );
+
+                        return;
+                    }
+
+                    mPlaybackPresenter.openVideo(
+                            cleanVideoId
+                    );
+
+                    Log.d(
+                            TAG,
+                            "YG Sync LOAD_VIDEO openVideo ejecutado"
+                    );
+                }
+        );
     }
 
     /**
@@ -2756,4 +2815,4 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
                 getContext()
         );
     }
-                    }
+                }
