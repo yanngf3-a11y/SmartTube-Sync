@@ -22,6 +22,7 @@ import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncCommand;
+import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncPlaybackBridge;
 import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncServer;
 
 import java.net.Socket;
@@ -46,14 +47,12 @@ public class PlaybackActivity extends LeanbackActivity {
 
     private PlaybackFragment mPlaybackFragment;
 
+    private YgSyncPlaybackBridge mYgSyncPlaybackBridge;
+
     private boolean mIsBackPressed;
 
     /**
      * YG Sync network server.
-     *
-     * This server is intentionally kept at the Activity integration
-     * layer for now. Later it will be connected to the real SmartTube
-     * playback engine.
      */
     private YgSyncServer mYgSyncServer;
 
@@ -71,24 +70,29 @@ public class PlaybackActivity extends LeanbackActivity {
                         );
 
         if (fragment instanceof PlaybackFragment) {
+
             mPlaybackFragment =
                     (PlaybackFragment) fragment;
+
+            mYgSyncPlaybackBridge =
+                    new YgSyncPlaybackBridge(
+                            mPlaybackFragment
+                    );
         }
 
         startYgSyncServer();
     }
 
     /**
-     * Starts the YG Sync TCP server.
-     *
-     * At this stage it only handles the connection and PING.
-     * Playback commands will be connected to SmartTube later.
+     * Starts the YG Sync TCP server and connects
+     * incoming commands to the SmartTube playback engine.
      */
     private void startYgSyncServer() {
 
-        if (mYgSyncServer != null &&
-                mYgSyncServer.isRunning()) {
-
+        if (
+                mYgSyncServer != null &&
+                mYgSyncServer.isRunning()
+        ) {
             return;
         }
 
@@ -136,11 +140,386 @@ public class PlaybackActivity extends LeanbackActivity {
                                     return;
                                 }
 
-                                /*
-                                 * Playback commands will be connected
-                                 * to SmartTube in the next integration
-                                 * step.
-                                 */
+                                if (
+                                        YgSyncCommand.CONNECT.equals(
+                                                command
+                                        )
+                                ) {
+
+                                    mYgSyncServer.send(
+                                            socket,
+                                            "CONNECTED"
+                                    );
+
+                                    return;
+                                }
+
+                                if (
+                                        YgSyncCommand.DISCONNECT.equals(
+                                                command
+                                        )
+                                ) {
+
+                                    mYgSyncServer.send(
+                                            socket,
+                                            "DISCONNECTED"
+                                    );
+
+                                    return;
+                                }
+
+                                if (
+                                        YgSyncCommand.LOAD_VIDEO.equals(
+                                                getCommandName(command)
+                                        )
+                                ) {
+
+                                    String videoId =
+                                            getCommandPayload(command);
+
+                                    if (
+                                            videoId == null ||
+                                            videoId.trim().isEmpty()
+                                    ) {
+
+                                        mYgSyncServer.send(
+                                                socket,
+                                                "ERROR|INVALID_VIDEO_ID"
+                                        );
+
+                                        return;
+                                    }
+
+                                    runOnUiThread(
+                                            () -> {
+
+                                                if (
+                                                        mYgSyncPlaybackBridge
+                                                                == null
+                                                ) {
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
+                                                    return;
+                                                }
+
+                                                mYgSyncPlaybackBridge
+                                                        .loadVideo(
+                                                                videoId
+                                                        );
+
+                                                mYgSyncServer.send(
+                                                        socket,
+                                                        "OK|LOAD_VIDEO"
+                                                );
+                                            }
+                                    );
+
+                                    return;
+                                }
+
+                                if (
+                                        YgSyncCommand.PLAY.equals(
+                                                command
+                                        )
+                                ) {
+
+                                    runOnUiThread(
+                                            () -> {
+
+                                                if (
+                                                        mYgSyncPlaybackBridge
+                                                                == null
+                                                ) {
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
+                                                    return;
+                                                }
+
+                                                mYgSyncPlaybackBridge.play();
+
+                                                mYgSyncServer.send(
+                                                        socket,
+                                                        "OK|PLAY"
+                                                );
+                                            }
+                                    );
+
+                                    return;
+                                }
+
+                                if (
+                                        YgSyncCommand.PAUSE.equals(
+                                                command
+                                        )
+                                ) {
+
+                                    runOnUiThread(
+                                            () -> {
+
+                                                if (
+                                                        mYgSyncPlaybackBridge
+                                                                == null
+                                                ) {
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
+                                                    return;
+                                                }
+
+                                                mYgSyncPlaybackBridge.pause();
+
+                                                mYgSyncServer.send(
+                                                        socket,
+                                                        "OK|PAUSE"
+                                                );
+                                            }
+                                    );
+
+                                    return;
+                                }
+
+                                if (
+                                        YgSyncCommand.STOP.equals(
+                                                command
+                                        )
+                                ) {
+
+                                    runOnUiThread(
+                                            () -> {
+
+                                                if (
+                                                        mYgSyncPlaybackBridge
+                                                                == null
+                                                ) {
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
+                                                    return;
+                                                }
+
+                                                mYgSyncPlaybackBridge.stop();
+
+                                                mYgSyncServer.send(
+                                                        socket,
+                                                        "OK|STOP"
+                                                );
+                                            }
+                                    );
+
+                                    return;
+                                }
+
+                                if (
+                                        YgSyncCommand.SEEK.equals(
+                                                getCommandName(command)
+                                        )
+                                ) {
+
+                                    String payload =
+                                            getCommandPayload(command);
+
+                                    try {
+
+                                        long positionMs =
+                                                Long.parseLong(
+                                                        payload
+                                                );
+
+                                        runOnUiThread(
+                                                () -> {
+
+                                                    if (
+                                                            mYgSyncPlaybackBridge
+                                                                    == null
+                                                    ) {
+
+                                                        mYgSyncServer.send(
+                                                                socket,
+                                                                "ERROR|PLAYER_NOT_READY"
+                                                        );
+
+                                                        return;
+                                                    }
+
+                                                    mYgSyncPlaybackBridge
+                                                            .seek(
+                                                                    Math.max(
+                                                                            0L,
+                                                                            positionMs
+                                                                    )
+                                                            );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "OK|SEEK"
+                                                    );
+                                                }
+                                        );
+
+                                    } catch (Exception error) {
+
+                                        mYgSyncServer.send(
+                                                socket,
+                                                "ERROR|INVALID_POSITION"
+                                        );
+                                    }
+
+                                    return;
+                                }
+
+                                if (
+                                        YgSyncCommand.SET_VOLUME.equals(
+                                                getCommandName(command)
+                                        )
+                                ) {
+
+                                    String payload =
+                                            getCommandPayload(command);
+
+                                    try {
+
+                                        float volume =
+                                                Float.parseFloat(
+                                                        payload
+                                                );
+
+                                        volume =
+                                                Math.max(
+                                                        0f,
+                                                        Math.min(
+                                                                1f,
+                                                                volume
+                                                        )
+                                                );
+
+                                        final float finalVolume =
+                                                volume;
+
+                                        runOnUiThread(
+                                                () -> {
+
+                                                    if (
+                                                            mYgSyncPlaybackBridge
+                                                                    == null
+                                                    ) {
+
+                                                        mYgSyncServer.send(
+                                                                socket,
+                                                                "ERROR|PLAYER_NOT_READY"
+                                                        );
+
+                                                        return;
+                                                    }
+
+                                                    mYgSyncPlaybackBridge
+                                                            .setVolume(
+                                                                    finalVolume
+                                                            );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "OK|SET_VOLUME"
+                                                    );
+                                                }
+                                        );
+
+                                    } catch (Exception error) {
+
+                                        mYgSyncServer.send(
+                                                socket,
+                                                "ERROR|INVALID_VOLUME"
+                                        );
+                                    }
+
+                                    return;
+                                }
+
+                                if (
+                                        YgSyncCommand.GET_STATUS.equals(
+                                                command
+                                        )
+                                ) {
+
+                                    runOnUiThread(
+                                            () -> {
+
+                                                if (
+                                                        mYgSyncPlaybackBridge
+                                                                == null
+                                                ) {
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
+                                                    return;
+                                                }
+
+                                                String videoId =
+                                                        mYgSyncPlaybackBridge
+                                                                .getVideoId();
+
+                                                long position =
+                                                        mYgSyncPlaybackBridge
+                                                                .getPosition();
+
+                                                long duration =
+                                                        mYgSyncPlaybackBridge
+                                                                .getDuration();
+
+                                                boolean playing =
+                                                        mYgSyncPlaybackBridge
+                                                                .isPlaying();
+
+                                                float volume =
+                                                        mYgSyncPlaybackBridge
+                                                                .getVolume();
+
+                                                if (videoId == null) {
+                                                    videoId = "";
+                                                }
+
+                                                String response =
+                                                        "STATUS|"
+                                                                + videoId
+                                                                + "|"
+                                                                + position
+                                                                + "|"
+                                                                + duration
+                                                                + "|"
+                                                                + playing
+                                                                + "|"
+                                                                + volume;
+
+                                                mYgSyncServer.send(
+                                                        socket,
+                                                        response
+                                                );
+                                            }
+                                    );
+
+                                    return;
+                                }
+
+                                mYgSyncServer.send(
+                                        socket,
+                                        "ERROR|UNKNOWN_COMMAND"
+                                );
                             }
 
                             @Override
@@ -178,6 +557,50 @@ public class PlaybackActivity extends LeanbackActivity {
     }
 
     /**
+     * Returns the command name before the first '|'.
+     */
+    private String getCommandName(
+            String command
+    ) {
+
+        if (command == null) {
+            return "";
+        }
+
+        String[] parts =
+                command.split(
+                        "\\|",
+                        2
+                );
+
+        return parts[0].trim();
+    }
+
+    /**
+     * Returns the payload after the first '|'.
+     */
+    private String getCommandPayload(
+            String command
+    ) {
+
+        if (command == null) {
+            return "";
+        }
+
+        String[] parts =
+                command.split(
+                        "\\|",
+                        2
+                );
+
+        if (parts.length < 2) {
+            return "";
+        }
+
+        return parts[1].trim();
+    }
+
+    /**
      * Stops the YG Sync server when the playback Activity
      * is really destroyed.
      */
@@ -190,6 +613,7 @@ public class PlaybackActivity extends LeanbackActivity {
         mYgSyncServer.stop();
 
         mYgSyncServer = null;
+        mYgSyncPlaybackBridge = null;
 
         Log.d(
                 TAG,
