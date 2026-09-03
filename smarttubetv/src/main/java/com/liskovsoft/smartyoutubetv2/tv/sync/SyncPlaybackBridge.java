@@ -75,17 +75,18 @@ import com.liskovsoft.smartyoutubetv2.common.app.views.PlaybackView;
   long positionMs
   ) {
   
-   /*
-  * PlaybackPresenter.setPosition()
-  * ya realiza el posicionamiento sobre
-  * el reproductor de SmartTube.
-  */
- presenter().setPosition(
-         Math.max(
-                 0,
-                 positionMs
-         )
- );
+   PlaybackView v =
+         view();
+
+ if (v != null) {
+
+     v.setPositionMs(
+             Math.max(
+                     0,
+                     positionMs
+             )
+     );
+ }
   
   }
   
@@ -133,10 +134,6 @@ import com.liskovsoft.smartyoutubetv2.common.app.views.PlaybackView;
      return;
  }
 
- /*
-  * SmartTube utiliza un rango de volumen
-  * de 0.0 a 1.0.
-  */
  float safeVolume =
          Math.max(
                  0.0f,
@@ -197,4 +194,34 @@ import com.liskovsoft.smartyoutubetv2.common.app.views.PlaybackView;
  }
   
   }
+  
+  /**
+  
+  * Obtiene el volumen actual del reproductor.
+    */
+    public float getVolume() {
+    
+    try {
+    
+     PlaybackView v =
+         view();
+
+ if (v == null) {
+     return 0.0f;
+ }
+
+ return Math.max(
+         0.0f,
+         Math.min(
+                 1.0f,
+                 v.getVolume()
+         )
+ );
+    
+    } catch (Exception ignored) {
+    
+     return 0.0f;
+    
+    }
+    }
   }
