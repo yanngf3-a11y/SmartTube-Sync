@@ -23,10 +23,13 @@
     <string name="no_search_results">No search results found for \'%1$s\'</string>
     <string name="catalog_url">https://storage.googleapis.com/android-tv/android_tv_videos_new.json</string>
 
+    <!-- Error messages -->
+
     <string name="videos_loading_error">Failed to load videos. Please check your network connection.</string>
     <string name="error_fragment_message">An error occurred</string>
     <string name="dismiss_error">Dismiss</string>
 
+    <!-- Global Search -->
     <string name="global_search">GLOBALSEARCH</string>
     <string name="search_label">Leanback API Demo</string>
     <string name="search_hint">Search for videos</string>
@@ -36,5 +39,4 @@
     <string name="noah_title">Noah</string>
     <string name="dragon2_title">How to Train Your Dragon 2</string>
     <string name="dragon2_description">Set in the mythical world of burly Vikings and wild dragons,
-        and based on the book by Cressida Cowell, the action comedy tells the story of Hiccup, a
-        Viking teenager
+        and
