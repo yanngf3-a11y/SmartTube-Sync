@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.widget.Toast;
 
 import androidx.fragment.app.Fragment;
 
@@ -78,6 +79,79 @@ public class PlaybackActivity extends LeanbackActivity {
                 TAG,
                 "YG Sync PlaybackActivity created. PlaybackFragment found: "
                         + (mPlaybackFragment != null)
+        );
+
+        showYgSyncDiagnostic(
+                "YG SYNC ACTIVADO"
+        );
+    }
+
+    /**
+     * Shows a visible YG Sync diagnostic message on the TV.
+     *
+     * This is intentionally implemented with Toast so we can test
+     * YG Sync without requiring Logcat.
+     */
+    private void showYgSyncDiagnostic(
+            String message
+    ) {
+
+        runOnUiThread(
+                () -> {
+
+                    try {
+
+                        Toast.makeText(
+                                PlaybackActivity.this,
+                                message,
+                                Toast.LENGTH_SHORT
+                        ).show();
+
+                    } catch (Exception error) {
+
+                        Log.e(
+                                TAG,
+                                "YG Sync diagnostic display error: "
+                                        + error.getMessage()
+                        );
+                    }
+                }
+        );
+    }
+
+    /**
+     * Shows the received command in a visible diagnostic message.
+     */
+    private void showYgSyncCommandDiagnostic(
+            String command
+    ) {
+
+        String diagnosticCommand =
+                command == null
+                        ? "NULL"
+                        : command;
+
+        showYgSyncDiagnostic(
+                "YG SYNC — COMANDO: "
+                        + diagnosticCommand
+        );
+    }
+
+    /**
+     * Shows a visible diagnostic response.
+     */
+    private void showYgSyncResponseDiagnostic(
+            String response
+    ) {
+
+        String diagnosticResponse =
+                response == null
+                        ? "NULL"
+                        : response;
+
+        showYgSyncDiagnostic(
+                "YG SYNC — "
+                        + diagnosticResponse
         );
     }
 
@@ -197,6 +271,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                 + socket.getInetAddress()
                                                 .getHostAddress()
                                 );
+
+                                showYgSyncDiagnostic(
+                                        "YG SYNC — CONECTADO"
+                                );
                             }
 
                             @Override
@@ -212,6 +290,20 @@ public class PlaybackActivity extends LeanbackActivity {
                                                 + "]"
                                 );
 
+                                /*
+                                 * VISUAL DIAGNOSTIC
+                                 *
+                                 * This is the most important addition.
+                                 *
+                                 * If the TV displays this message when
+                                 * a button is pressed on the phone,
+                                 * the TCP command is successfully reaching
+                                 * SmartTube.
+                                 */
+                                showYgSyncCommandDiagnostic(
+                                        command
+                                );
+
                                 if (command == null) {
 
                                     Log.e(
@@ -221,6 +313,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                     mYgSyncServer.send(
                                             socket,
+                                            "ERROR|NULL_COMMAND"
+                                    );
+
+                                    showYgSyncResponseDiagnostic(
                                             "ERROR|NULL_COMMAND"
                                     );
 
@@ -253,6 +349,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                             "PONG"
                                     );
 
+                                    showYgSyncResponseDiagnostic(
+                                            "PONG"
+                                    );
+
                                     return;
                                 }
 
@@ -272,6 +372,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                             "CONNECTED"
                                     );
 
+                                    showYgSyncResponseDiagnostic(
+                                            "CONNECTED"
+                                    );
+
                                     return;
                                 }
 
@@ -288,6 +392,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                     mYgSyncServer.send(
                                             socket,
+                                            "DISCONNECTED"
+                                    );
+
+                                    showYgSyncResponseDiagnostic(
                                             "DISCONNECTED"
                                     );
 
@@ -324,6 +432,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                 "ERROR|INVALID_VIDEO_ID"
                                         );
 
+                                        showYgSyncResponseDiagnostic(
+                                                "ERROR|INVALID_VIDEO_ID"
+                                        );
+
                                         return;
                                     }
 
@@ -353,6 +465,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             "ERROR|PLAYER_NOT_READY"
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
                                                     return;
                                                 }
 
@@ -373,6 +489,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             "OK|LOAD_VIDEO"
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "OK|LOAD_VIDEO"
+                                                    );
+
                                                 } catch (Exception error) {
 
                                                     Log.e(
@@ -383,6 +503,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                                     mYgSyncServer.send(
                                                             socket,
+                                                            "ERROR|LOAD_VIDEO_FAILED"
+                                                    );
+
+                                                    showYgSyncResponseDiagnostic(
                                                             "ERROR|LOAD_VIDEO_FAILED"
                                                     );
                                                 }
@@ -425,6 +549,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             "ERROR|PLAYER_NOT_READY"
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
                                                     return;
                                                 }
 
@@ -442,6 +570,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             "OK|PLAY"
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "OK|PLAY"
+                                                    );
+
                                                 } catch (Exception error) {
 
                                                     Log.e(
@@ -452,6 +584,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                                     mYgSyncServer.send(
                                                             socket,
+                                                            "ERROR|PLAY_FAILED"
+                                                    );
+
+                                                    showYgSyncResponseDiagnostic(
                                                             "ERROR|PLAY_FAILED"
                                                     );
                                                 }
@@ -494,6 +630,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             "ERROR|PLAYER_NOT_READY"
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
                                                     return;
                                                 }
 
@@ -511,6 +651,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             "OK|PAUSE"
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "OK|PAUSE"
+                                                    );
+
                                                 } catch (Exception error) {
 
                                                     Log.e(
@@ -521,6 +665,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                                     mYgSyncServer.send(
                                                             socket,
+                                                            "ERROR|PAUSE_FAILED"
+                                                    );
+
+                                                    showYgSyncResponseDiagnostic(
                                                             "ERROR|PAUSE_FAILED"
                                                     );
                                                 }
@@ -563,6 +711,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             "ERROR|PLAYER_NOT_READY"
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
                                                     return;
                                                 }
 
@@ -580,6 +732,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             "OK|STOP"
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "OK|STOP"
+                                                    );
+
                                                 } catch (Exception error) {
 
                                                     Log.e(
@@ -590,6 +746,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                                     mYgSyncServer.send(
                                                             socket,
+                                                            "ERROR|STOP_FAILED"
+                                                    );
+
+                                                    showYgSyncResponseDiagnostic(
                                                             "ERROR|STOP_FAILED"
                                                     );
                                                 }
@@ -638,6 +798,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                                 "ERROR|PLAYER_NOT_READY"
                                                         );
 
+                                                        showYgSyncResponseDiagnostic(
+                                                                "ERROR|PLAYER_NOT_READY"
+                                                        );
+
                                                         return;
                                                     }
 
@@ -661,6 +825,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                                 "OK|SEEK"
                                                         );
 
+                                                        showYgSyncResponseDiagnostic(
+                                                                "OK|SEEK"
+                                                        );
+
                                                     } catch (Exception error) {
 
                                                         Log.e(
@@ -671,6 +839,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                                         mYgSyncServer.send(
                                                                 socket,
+                                                                "ERROR|SEEK_FAILED"
+                                                        );
+
+                                                        showYgSyncResponseDiagnostic(
                                                                 "ERROR|SEEK_FAILED"
                                                         );
                                                     }
@@ -687,6 +859,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                         mYgSyncServer.send(
                                                 socket,
+                                                "ERROR|INVALID_POSITION"
+                                        );
+
+                                        showYgSyncResponseDiagnostic(
                                                 "ERROR|INVALID_POSITION"
                                         );
                                     }
@@ -745,6 +921,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                                 "ERROR|PLAYER_NOT_READY"
                                                         );
 
+                                                        showYgSyncResponseDiagnostic(
+                                                                "ERROR|PLAYER_NOT_READY"
+                                                        );
+
                                                         return;
                                                     }
 
@@ -765,6 +945,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                                 "OK|SET_VOLUME"
                                                         );
 
+                                                        showYgSyncResponseDiagnostic(
+                                                                "OK|SET_VOLUME"
+                                                        );
+
                                                     } catch (Exception error) {
 
                                                         Log.e(
@@ -775,6 +959,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                                         mYgSyncServer.send(
                                                                 socket,
+                                                                "ERROR|SET_VOLUME_FAILED"
+                                                        );
+
+                                                        showYgSyncResponseDiagnostic(
                                                                 "ERROR|SET_VOLUME_FAILED"
                                                         );
                                                     }
@@ -791,6 +979,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                         mYgSyncServer.send(
                                                 socket,
+                                                "ERROR|INVALID_VOLUME"
+                                        );
+
+                                        showYgSyncResponseDiagnostic(
                                                 "ERROR|INVALID_VOLUME"
                                         );
                                     }
@@ -823,6 +1015,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                                     mYgSyncServer.send(
                                                             socket,
+                                                            "ERROR|PLAYER_NOT_READY"
+                                                    );
+
+                                                    showYgSyncResponseDiagnostic(
                                                             "ERROR|PLAYER_NOT_READY"
                                                     );
 
@@ -878,6 +1074,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                                             response
                                                     );
 
+                                                    showYgSyncResponseDiagnostic(
+                                                            "STATUS OK"
+                                                    );
+
                                                 } catch (Exception error) {
 
                                                     Log.e(
@@ -888,6 +1088,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                                     mYgSyncServer.send(
                                                             socket,
+                                                            "ERROR|STATUS_FAILED"
+                                                    );
+
+                                                    showYgSyncResponseDiagnostic(
                                                             "ERROR|STATUS_FAILED"
                                                     );
                                                 }
@@ -907,6 +1111,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                         socket,
                                         "ERROR|UNKNOWN_COMMAND"
                                 );
+
+                                showYgSyncResponseDiagnostic(
+                                        "ERROR|UNKNOWN_COMMAND"
+                                );
                             }
 
                             @Override
@@ -917,6 +1125,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                 Log.d(
                                         TAG,
                                         "YG Sync disconnected"
+                                );
+
+                                showYgSyncDiagnostic(
+                                        "YG SYNC — DESCONECTADO"
                                 );
                             }
 
@@ -929,6 +1141,10 @@ public class PlaybackActivity extends LeanbackActivity {
                                         TAG,
                                         "YG Sync server error: "
                                                 + error.getMessage()
+                                );
+
+                                showYgSyncDiagnostic(
+                                        "YG SYNC — ERROR SERVIDOR"
                                 );
                             }
                         }
@@ -1532,4 +1748,4 @@ public class PlaybackActivity extends LeanbackActivity {
     //    return getGeneralData().getBackgroundPlaybackShortcut() == PlayerData.BACKGROUND_PLAYBACK_SHORTCUT_BACK ||
     //            getGeneralData().getBackgroundPlaybackShortcut() == PlayerData.BACKGROUND_PLAYBACK_SHORTCUT_HOME_BACK;
     //}
-                }
+    }
