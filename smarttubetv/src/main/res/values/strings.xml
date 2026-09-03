@@ -30,13 +30,21 @@
     <string name="dismiss_error">Dismiss</string>
 
     <!-- Global Search -->
+    <!-- The action label for global search -->
     <string name="global_search">GLOBALSEARCH</string>
+
+    <!-- The label for use as a searchable item -->
     <string name="search_label">Leanback API Demo</string>
+
+    <!-- The hint text that appears in the search box. -->
     <string name="search_hint">Search for videos</string>
+
+    <!-- The description that will show up in the search settings for this source.  -->
     <string name="settings_description">Leanback API Demo Videos</string>
 
     <string name="noah_description">to build an Ark to save creation from the coming flood.</string>
     <string name="noah_title">Noah</string>
     <string name="dragon2_title">How to Train Your Dragon 2</string>
     <string name="dragon2_description">Set in the mythical world of burly Vikings and wild dragons,
-        and
+        and based on the book by Cressida Cowell, the action comedy tells the story of Hiccup, a
+        Viking teenager
