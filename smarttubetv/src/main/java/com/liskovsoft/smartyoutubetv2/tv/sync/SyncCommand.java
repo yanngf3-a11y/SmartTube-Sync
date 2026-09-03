@@ -42,11 +42,6 @@ public static void execute(
 
             case "stop":
 
-                /*
-                 * STOP:
-                 * pausa y devuelve el reproductor
-                 * al inicio del contenido.
-                 */
                 player.pause();
                 player.seekTo(0);
 
@@ -73,12 +68,10 @@ public static void execute(
             case "open": {
 
                 String videoId =
-                        message.payload
-                                .optString(
-                                        "videoId",
-                                        ""
-                                )
-                                .trim();
+                        message.payload.optString(
+                                "videoId",
+                                ""
+                        ).trim();
 
                 if (!videoId.isEmpty()) {
 
@@ -105,12 +98,27 @@ public static void execute(
             case "setVolume": {
 
                 /*
-                 * El volumen se recibe en rango 0.0 - 1.0.
-                 *
-                 * SyncPlayerBridge actualmente no expone
-                 * setVolume(), por lo que este comando queda
-                 * reservado hasta ampliar la interfaz.
+                 * Volumen en rango 0.0 - 1.0.
                  */
+                float volume =
+                        (float) message.payload.optDouble(
+                                "volume",
+                                1.0
+                        );
+
+                volume =
+                        Math.max(
+                                0.0f,
+                                Math.min(
+                                        1.0f,
+                                        volume
+                                )
+                        );
+
+                player.setVolume(
+                        volume
+                );
+
                 break;
             }
 
@@ -166,11 +174,20 @@ public static void execute(
                 break;
             }
 
+            case "getStatus":
+            case "status":
+
+                /*
+                 * El estado se obtiene directamente desde
+                 * SyncWebSocketServer.
+                 */
+                break;
+
             default:
 
                 /*
-                 * Tipo desconocido:
-                 * se ignora sin provocar un crash.
+                 * Comando desconocido.
+                 * Se ignora sin provocar un crash.
                  */
                 break;
         }
@@ -184,4 +201,4 @@ public static void execute(
     }
 }
 
-}
+        }
