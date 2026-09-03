@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.nio.charset.StandardCharsets;
 
 /**
  * YG Sync UDP discovery server.
@@ -124,8 +123,7 @@ public class YgSyncDiscoveryServer {
                         new String(
                                 packet.getData(),
                                 packet.getOffset(),
-                                packet.getLength(),
-                                StandardCharsets.UTF_8
+                                packet.getLength()
                         ).trim();
 
                 Log.d(
@@ -147,9 +145,7 @@ public class YgSyncDiscoveryServer {
                                 + TCP_PORT;
 
                 byte[] responseData =
-                        response.getBytes(
-                                StandardCharsets.UTF_8
-                        );
+                        response.getBytes();
 
                 DatagramPacket responsePacket =
                         new DatagramPacket(
@@ -277,7 +273,7 @@ public class YgSyncDiscoveryServer {
 
         if (
                 multicastLock != null
-                && multicastLock.isHeld()
+                        && multicastLock.isHeld()
         ) {
 
             try {
@@ -296,4 +292,4 @@ public class YgSyncDiscoveryServer {
     public int getPort() {
         return DEFAULT_PORT;
     }
-  }
+}
