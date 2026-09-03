@@ -68,6 +68,29 @@ public class PlaybackActivity extends LeanbackActivity {
 
         setContentView(R.layout.fragment_playback);
 
+        findPlaybackFragment();
+
+        startYgSyncServer();
+
+        startYgSyncDiscoveryServer();
+
+        Log.d(
+                TAG,
+                "YG Sync PlaybackActivity created. PlaybackFragment found: "
+                        + (mPlaybackFragment != null)
+        );
+    }
+
+    /**
+     * Finds the active PlaybackFragment and creates the
+     * YG Sync bridge.
+     *
+     * This method can be called more than once because the
+     * Fragment may not be immediately available during the
+     * first Activity lifecycle callback.
+     */
+    private boolean findPlaybackFragment() {
+
         Fragment fragment =
                 getSupportFragmentManager()
                         .findFragmentByTag(
@@ -79,15 +102,70 @@ public class PlaybackActivity extends LeanbackActivity {
             mPlaybackFragment =
                     (PlaybackFragment) fragment;
 
-            mYgSyncPlaybackBridge =
-                    new YgSyncPlaybackBridge(
-                            mPlaybackFragment
-                    );
+        } else {
+
+            for (
+                    Fragment candidate
+                    : getSupportFragmentManager().getFragments()
+            ) {
+
+                if (candidate instanceof PlaybackFragment) {
+
+                    mPlaybackFragment =
+                            (PlaybackFragment) candidate;
+
+                    break;
+                }
+            }
         }
 
-        startYgSyncServer();
+        if (mPlaybackFragment != null) {
 
-        startYgSyncDiscoveryServer();
+            if (mYgSyncPlaybackBridge == null) {
+
+                mYgSyncPlaybackBridge =
+                        new YgSyncPlaybackBridge(
+                                mPlaybackFragment
+                        );
+            }
+
+            Log.d(
+                    TAG,
+                    "YG Sync PlaybackFragment found: "
+                            + mPlaybackFragment
+            );
+
+            return true;
+        }
+
+        Log.e(
+                TAG,
+                "YG Sync PlaybackFragment NOT found"
+        );
+
+        return false;
+    }
+
+    /**
+     * Ensures that the PlaybackFragment and YG Sync bridge
+     * are available before executing a command.
+     */
+    private boolean ensurePlaybackBridge() {
+
+        if (
+                mPlaybackFragment != null &&
+                mYgSyncPlaybackBridge != null
+        ) {
+
+            return true;
+        }
+
+        Log.d(
+                TAG,
+                "YG Sync bridge not ready. Searching for PlaybackFragment..."
+        );
+
+        return findPlaybackFragment();
     }
 
     /**
@@ -129,15 +207,46 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 Log.d(
                                         TAG,
-                                        "YG Sync command: "
+                                        "YG Sync command received: ["
                                                 + command
+                                                + "]"
+                                );
+
+                                if (command == null) {
+
+                                    Log.e(
+                                            TAG,
+                                            "YG Sync received NULL command"
+                                    );
+
+                                    mYgSyncServer.send(
+                                            socket,
+                                            "ERROR|NULL_COMMAND"
+                                    );
+
+                                    return;
+                                }
+
+                                String commandName =
+                                        getCommandName(command);
+
+                                Log.d(
+                                        TAG,
+                                        "YG Sync command name: ["
+                                                + commandName
+                                                + "]"
                                 );
 
                                 if (
                                         YgSyncCommand.PING.equals(
-                                                command
+                                                commandName
                                         )
                                 ) {
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync responding PONG"
+                                    );
 
                                     mYgSyncServer.send(
                                             socket,
@@ -149,9 +258,14 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.CONNECT.equals(
-                                                command
+                                                commandName
                                         )
                                 ) {
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync CONNECT received"
+                                    );
 
                                     mYgSyncServer.send(
                                             socket,
@@ -163,9 +277,14 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.DISCONNECT.equals(
-                                                command
+                                                commandName
                                         )
                                 ) {
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync DISCONNECT received"
+                                    );
 
                                     mYgSyncServer.send(
                                             socket,
@@ -177,17 +296,28 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.LOAD_VIDEO.equals(
-                                                getCommandName(command)
+                                                commandName
                                         )
                                 ) {
 
                                     String videoId =
                                             getCommandPayload(command);
 
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync LOAD_VIDEO received. ID: "
+                                                    + videoId
+                                    );
+
                                     if (
                                             videoId == null ||
                                             videoId.trim().isEmpty()
                                     ) {
+
+                                        Log.e(
+                                                TAG,
+                                                "YG Sync LOAD_VIDEO invalid video ID"
+                                        );
 
                                         mYgSyncServer.send(
                                                 socket,
@@ -197,13 +327,26 @@ public class PlaybackActivity extends LeanbackActivity {
                                         return;
                                     }
 
+                                    final String cleanVideoId =
+                                            videoId.trim();
+
                                     runOnUiThread(
                                             () -> {
 
+                                                Log.d(
+                                                        TAG,
+                                                        "YG Sync LOAD_VIDEO executing on UI thread. ID: "
+                                                                + cleanVideoId
+                                                );
+
                                                 if (
-                                                        mYgSyncPlaybackBridge
-                                                                == null
+                                                        !ensurePlaybackBridge()
                                                 ) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync LOAD_VIDEO failed: PlaybackBridge unavailable"
+                                                    );
 
                                                     mYgSyncServer.send(
                                                             socket,
@@ -213,15 +356,36 @@ public class PlaybackActivity extends LeanbackActivity {
                                                     return;
                                                 }
 
-                                                mYgSyncPlaybackBridge
-                                                        .loadVideo(
-                                                                videoId
-                                                        );
+                                                try {
 
-                                                mYgSyncServer.send(
-                                                        socket,
-                                                        "OK|LOAD_VIDEO"
-                                                );
+                                                    mYgSyncPlaybackBridge
+                                                            .loadVideo(
+                                                                    cleanVideoId
+                                                            );
+
+                                                    Log.d(
+                                                            TAG,
+                                                            "YG Sync LOAD_VIDEO bridge.loadVideo executed successfully"
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "OK|LOAD_VIDEO"
+                                                    );
+
+                                                } catch (Exception error) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync LOAD_VIDEO execution error: "
+                                                                    + error.getMessage()
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|LOAD_VIDEO_FAILED"
+                                                    );
+                                                }
                                             }
                                     );
 
@@ -230,17 +394,31 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.PLAY.equals(
-                                                command
+                                                commandName
                                         )
                                 ) {
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync PLAY received"
+                                    );
 
                                     runOnUiThread(
                                             () -> {
 
+                                                Log.d(
+                                                        TAG,
+                                                        "YG Sync PLAY executing on UI thread"
+                                                );
+
                                                 if (
-                                                        mYgSyncPlaybackBridge
-                                                                == null
+                                                        !ensurePlaybackBridge()
                                                 ) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync PLAY failed: PlaybackBridge unavailable"
+                                                    );
 
                                                     mYgSyncServer.send(
                                                             socket,
@@ -250,12 +428,33 @@ public class PlaybackActivity extends LeanbackActivity {
                                                     return;
                                                 }
 
-                                                mYgSyncPlaybackBridge.play();
+                                                try {
 
-                                                mYgSyncServer.send(
-                                                        socket,
-                                                        "OK|PLAY"
-                                                );
+                                                    mYgSyncPlaybackBridge.play();
+
+                                                    Log.d(
+                                                            TAG,
+                                                            "YG Sync PLAY executed successfully"
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "OK|PLAY"
+                                                    );
+
+                                                } catch (Exception error) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync PLAY execution error: "
+                                                                    + error.getMessage()
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|PLAY_FAILED"
+                                                    );
+                                                }
                                             }
                                     );
 
@@ -264,17 +463,31 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.PAUSE.equals(
-                                                command
+                                                commandName
                                         )
                                 ) {
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync PAUSE received"
+                                    );
 
                                     runOnUiThread(
                                             () -> {
 
+                                                Log.d(
+                                                        TAG,
+                                                        "YG Sync PAUSE executing on UI thread"
+                                                );
+
                                                 if (
-                                                        mYgSyncPlaybackBridge
-                                                                == null
+                                                        !ensurePlaybackBridge()
                                                 ) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync PAUSE failed: PlaybackBridge unavailable"
+                                                    );
 
                                                     mYgSyncServer.send(
                                                             socket,
@@ -284,12 +497,33 @@ public class PlaybackActivity extends LeanbackActivity {
                                                     return;
                                                 }
 
-                                                mYgSyncPlaybackBridge.pause();
+                                                try {
 
-                                                mYgSyncServer.send(
-                                                        socket,
-                                                        "OK|PAUSE"
-                                                );
+                                                    mYgSyncPlaybackBridge.pause();
+
+                                                    Log.d(
+                                                            TAG,
+                                                            "YG Sync PAUSE executed successfully"
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "OK|PAUSE"
+                                                    );
+
+                                                } catch (Exception error) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync PAUSE execution error: "
+                                                                    + error.getMessage()
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|PAUSE_FAILED"
+                                                    );
+                                                }
                                             }
                                     );
 
@@ -298,17 +532,31 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.STOP.equals(
-                                                command
+                                                commandName
                                         )
                                 ) {
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync STOP received"
+                                    );
 
                                     runOnUiThread(
                                             () -> {
 
+                                                Log.d(
+                                                        TAG,
+                                                        "YG Sync STOP executing on UI thread"
+                                                );
+
                                                 if (
-                                                        mYgSyncPlaybackBridge
-                                                                == null
+                                                        !ensurePlaybackBridge()
                                                 ) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync STOP failed: PlaybackBridge unavailable"
+                                                    );
 
                                                     mYgSyncServer.send(
                                                             socket,
@@ -318,12 +566,33 @@ public class PlaybackActivity extends LeanbackActivity {
                                                     return;
                                                 }
 
-                                                mYgSyncPlaybackBridge.stop();
+                                                try {
 
-                                                mYgSyncServer.send(
-                                                        socket,
-                                                        "OK|STOP"
-                                                );
+                                                    mYgSyncPlaybackBridge.stop();
+
+                                                    Log.d(
+                                                            TAG,
+                                                            "YG Sync STOP executed successfully"
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "OK|STOP"
+                                                    );
+
+                                                } catch (Exception error) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync STOP execution error: "
+                                                                    + error.getMessage()
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|STOP_FAILED"
+                                                    );
+                                                }
                                             }
                                     );
 
@@ -332,12 +601,18 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.SEEK.equals(
-                                                getCommandName(command)
+                                                commandName
                                         )
                                 ) {
 
                                     String payload =
                                             getCommandPayload(command);
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync SEEK received: "
+                                                    + payload
+                                    );
 
                                     try {
 
@@ -350,9 +625,13 @@ public class PlaybackActivity extends LeanbackActivity {
                                                 () -> {
 
                                                     if (
-                                                            mYgSyncPlaybackBridge
-                                                                    == null
+                                                            !ensurePlaybackBridge()
                                                     ) {
+
+                                                        Log.e(
+                                                                TAG,
+                                                                "YG Sync SEEK failed: PlaybackBridge unavailable"
+                                                        );
 
                                                         mYgSyncServer.send(
                                                                 socket,
@@ -362,22 +641,49 @@ public class PlaybackActivity extends LeanbackActivity {
                                                         return;
                                                     }
 
-                                                    mYgSyncPlaybackBridge
-                                                            .seek(
-                                                                    Math.max(
-                                                                            0L,
-                                                                            positionMs
-                                                                    )
-                                                            );
+                                                    try {
 
-                                                    mYgSyncServer.send(
-                                                            socket,
-                                                            "OK|SEEK"
-                                                    );
+                                                        mYgSyncPlaybackBridge
+                                                                .seek(
+                                                                        Math.max(
+                                                                                0L,
+                                                                                positionMs
+                                                                        )
+                                                                );
+
+                                                        Log.d(
+                                                                TAG,
+                                                                "YG Sync SEEK executed successfully"
+                                                        );
+
+                                                        mYgSyncServer.send(
+                                                                socket,
+                                                                "OK|SEEK"
+                                                        );
+
+                                                    } catch (Exception error) {
+
+                                                        Log.e(
+                                                                TAG,
+                                                                "YG Sync SEEK execution error: "
+                                                                        + error.getMessage()
+                                                        );
+
+                                                        mYgSyncServer.send(
+                                                                socket,
+                                                                "ERROR|SEEK_FAILED"
+                                                        );
+                                                    }
                                                 }
                                         );
 
                                     } catch (Exception error) {
+
+                                        Log.e(
+                                                TAG,
+                                                "YG Sync invalid SEEK position: "
+                                                        + payload
+                                        );
 
                                         mYgSyncServer.send(
                                                 socket,
@@ -390,12 +696,18 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.SET_VOLUME.equals(
-                                                getCommandName(command)
+                                                commandName
                                         )
                                 ) {
 
                                     String payload =
                                             getCommandPayload(command);
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync SET_VOLUME received: "
+                                                    + payload
+                                    );
 
                                     try {
 
@@ -420,9 +732,13 @@ public class PlaybackActivity extends LeanbackActivity {
                                                 () -> {
 
                                                     if (
-                                                            mYgSyncPlaybackBridge
-                                                                    == null
+                                                            !ensurePlaybackBridge()
                                                     ) {
+
+                                                        Log.e(
+                                                                TAG,
+                                                                "YG Sync SET_VOLUME failed: PlaybackBridge unavailable"
+                                                        );
 
                                                         mYgSyncServer.send(
                                                                 socket,
@@ -432,19 +748,46 @@ public class PlaybackActivity extends LeanbackActivity {
                                                         return;
                                                     }
 
-                                                    mYgSyncPlaybackBridge
-                                                            .setVolume(
-                                                                    finalVolume
-                                                            );
+                                                    try {
 
-                                                    mYgSyncServer.send(
-                                                            socket,
-                                                            "OK|SET_VOLUME"
-                                                    );
+                                                        mYgSyncPlaybackBridge
+                                                                .setVolume(
+                                                                        finalVolume
+                                                                );
+
+                                                        Log.d(
+                                                                TAG,
+                                                                "YG Sync SET_VOLUME executed successfully"
+                                                        );
+
+                                                        mYgSyncServer.send(
+                                                                socket,
+                                                                "OK|SET_VOLUME"
+                                                        );
+
+                                                    } catch (Exception error) {
+
+                                                        Log.e(
+                                                                TAG,
+                                                                "YG Sync SET_VOLUME execution error: "
+                                                                        + error.getMessage()
+                                                        );
+
+                                                        mYgSyncServer.send(
+                                                                socket,
+                                                                "ERROR|SET_VOLUME_FAILED"
+                                                        );
+                                                    }
                                                 }
                                         );
 
                                     } catch (Exception error) {
+
+                                        Log.e(
+                                                TAG,
+                                                "YG Sync invalid volume: "
+                                                        + payload
+                                        );
 
                                         mYgSyncServer.send(
                                                 socket,
@@ -457,17 +800,26 @@ public class PlaybackActivity extends LeanbackActivity {
 
                                 if (
                                         YgSyncCommand.GET_STATUS.equals(
-                                                command
+                                                commandName
                                         )
                                 ) {
+
+                                    Log.d(
+                                            TAG,
+                                            "YG Sync GET_STATUS received"
+                                    );
 
                                     runOnUiThread(
                                             () -> {
 
                                                 if (
-                                                        mYgSyncPlaybackBridge
-                                                                == null
+                                                        !ensurePlaybackBridge()
                                                 ) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync GET_STATUS failed: PlaybackBridge unavailable"
+                                                    );
 
                                                     mYgSyncServer.send(
                                                             socket,
@@ -477,51 +829,79 @@ public class PlaybackActivity extends LeanbackActivity {
                                                     return;
                                                 }
 
-                                                String videoId =
-                                                        mYgSyncPlaybackBridge
-                                                                .getVideoId();
+                                                try {
 
-                                                long position =
-                                                        mYgSyncPlaybackBridge
-                                                                .getPosition();
+                                                    String videoId =
+                                                            mYgSyncPlaybackBridge
+                                                                    .getVideoId();
 
-                                                long duration =
-                                                        mYgSyncPlaybackBridge
-                                                                .getDuration();
+                                                    long position =
+                                                            mYgSyncPlaybackBridge
+                                                                    .getPosition();
 
-                                                boolean playing =
-                                                        mYgSyncPlaybackBridge
-                                                                .isPlaying();
+                                                    long duration =
+                                                            mYgSyncPlaybackBridge
+                                                                    .getDuration();
 
-                                                float volume =
-                                                        mYgSyncPlaybackBridge
-                                                                .getVolume();
+                                                    boolean playing =
+                                                            mYgSyncPlaybackBridge
+                                                                    .isPlaying();
 
-                                                if (videoId == null) {
-                                                    videoId = "";
+                                                    float volume =
+                                                            mYgSyncPlaybackBridge
+                                                                    .getVolume();
+
+                                                    if (videoId == null) {
+                                                        videoId = "";
+                                                    }
+
+                                                    String response =
+                                                            "STATUS|"
+                                                                    + videoId
+                                                                    + "|"
+                                                                    + position
+                                                                    + "|"
+                                                                    + duration
+                                                                    + "|"
+                                                                    + playing
+                                                                    + "|"
+                                                                    + volume;
+
+                                                    Log.d(
+                                                            TAG,
+                                                            "YG Sync GET_STATUS response: "
+                                                                    + response
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            response
+                                                    );
+
+                                                } catch (Exception error) {
+
+                                                    Log.e(
+                                                            TAG,
+                                                            "YG Sync GET_STATUS execution error: "
+                                                                    + error.getMessage()
+                                                    );
+
+                                                    mYgSyncServer.send(
+                                                            socket,
+                                                            "ERROR|STATUS_FAILED"
+                                                    );
                                                 }
-
-                                                String response =
-                                                        "STATUS|"
-                                                                + videoId
-                                                                + "|"
-                                                                + position
-                                                                + "|"
-                                                                + duration
-                                                                + "|"
-                                                                + playing
-                                                                + "|"
-                                                                + volume;
-
-                                                mYgSyncServer.send(
-                                                        socket,
-                                                        response
-                                                );
                                             }
                                     );
 
                                     return;
                                 }
+
+                                Log.e(
+                                        TAG,
+                                        "YG Sync unknown command: "
+                                                + command
+                                );
 
                                 mYgSyncServer.send(
                                         socket,
@@ -1031,6 +1411,7 @@ public class PlaybackActivity extends LeanbackActivity {
 
         // Check that user not open dialog/search activity instead of really leaving the activity
         // Activity may be overlapped by the dialog, back is pressed or new view started
+        // Activity may be overlapped by the dialog, back is pressed or new view started
         if (
                 mIsBackPressed
                         || isFinishing()
@@ -1135,7 +1516,7 @@ public class PlaybackActivity extends LeanbackActivity {
 
         sIsInPipMode = isInPipMode();
 
-        //return sIsInPipMode || mPlaybackFragment.getBackgroundMode() == PlayerData.BACKGROUND_MODE_SOUND;
+        //return sIsInPipMode || mPlaybackFragment.getBackgroundMode() == PlayerEngine.BACKGROUND_MODE_SOUND;
         //return sIsInPipMode || mPlaybackFragment.isEngineBlocked();
 
         boolean isBackground =
@@ -1151,4 +1532,4 @@ public class PlaybackActivity extends LeanbackActivity {
     //    return getGeneralData().getBackgroundPlaybackShortcut() == PlayerData.BACKGROUND_PLAYBACK_SHORTCUT_BACK ||
     //            getGeneralData().getBackgroundPlaybackShortcut() == PlayerData.BACKGROUND_PLAYBACK_SHORTCUT_HOME_BACK;
     //}
-            }
+                }
