@@ -12,7 +12,6 @@ import androidx.fragment.app.Fragment;
 
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
-import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerEngine;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.PlaybackView;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
@@ -22,6 +21,7 @@ import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncCommand;
+import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncDiscoveryServer;
 import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncPlaybackBridge;
 import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncServer;
 
@@ -52,9 +52,14 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean mIsBackPressed;
 
     /**
-     * YG Sync network server.
+     * YG Sync TCP network server.
      */
     private YgSyncServer mYgSyncServer;
+
+    /**
+     * YG Sync UDP discovery server.
+     */
+    private YgSyncDiscoveryServer mYgSyncDiscoveryServer;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -81,6 +86,8 @@ public class PlaybackActivity extends LeanbackActivity {
         }
 
         startYgSyncServer();
+
+        startYgSyncDiscoveryServer();
     }
 
     /**
@@ -557,6 +564,34 @@ public class PlaybackActivity extends LeanbackActivity {
     }
 
     /**
+     * Starts the YG Sync UDP discovery server.
+     *
+     * The Controller sends YG_SYNC_DISCOVER on UDP port 8766.
+     * This server responds with the SmartTube receiver name
+     * and TCP port used for commands.
+     */
+    private void startYgSyncDiscoveryServer() {
+
+        if (
+                mYgSyncDiscoveryServer != null &&
+                mYgSyncDiscoveryServer.isRunning()
+        ) {
+            return;
+        }
+
+        mYgSyncDiscoveryServer =
+                new YgSyncDiscoveryServer(this);
+
+        mYgSyncDiscoveryServer.start();
+
+        Log.d(
+                TAG,
+                "YG Sync discovery started on UDP port "
+                        + mYgSyncDiscoveryServer.getPort()
+        );
+    }
+
+    /**
      * Returns the command name before the first '|'.
      */
     private String getCommandName(
@@ -601,23 +636,30 @@ public class PlaybackActivity extends LeanbackActivity {
     }
 
     /**
-     * Stops the YG Sync server when the playback Activity
-     * is really destroyed.
+     * Stops the YG Sync TCP and UDP servers when the
+     * playback Activity is really destroyed.
      */
     private void stopYgSyncServer() {
 
-        if (mYgSyncServer == null) {
-            return;
+        if (mYgSyncServer != null) {
+
+            mYgSyncServer.stop();
+
+            mYgSyncServer = null;
         }
 
-        mYgSyncServer.stop();
+        if (mYgSyncDiscoveryServer != null) {
 
-        mYgSyncServer = null;
+            mYgSyncDiscoveryServer.stop();
+
+            mYgSyncDiscoveryServer = null;
+        }
+
         mYgSyncPlaybackBridge = null;
 
         Log.d(
                 TAG,
-                "YG Sync server stopped"
+                "YG Sync TCP and UDP servers stopped"
         );
     }
 
@@ -989,7 +1031,6 @@ public class PlaybackActivity extends LeanbackActivity {
 
         // Check that user not open dialog/search activity instead of really leaving the activity
         // Activity may be overlapped by the dialog, back is pressed or new view started
-        // Activity may be overlapped by the dialog, back is pressed or new view started
         if (
                 mIsBackPressed
                         || isFinishing()
@@ -1094,7 +1135,7 @@ public class PlaybackActivity extends LeanbackActivity {
 
         sIsInPipMode = isInPipMode();
 
-        //return sIsInPipMode || mPlaybackFragment.getBackgroundMode() == PlayerEngine.BACKGROUND_MODE_SOUND;
+        //return sIsInPipMode || mPlaybackFragment.getBackgroundMode() == PlayerData.BACKGROUND_MODE_SOUND;
         //return sIsInPipMode || mPlaybackFragment.isEngineBlocked();
 
         boolean isBackground =
@@ -1110,4 +1151,4 @@ public class PlaybackActivity extends LeanbackActivity {
     //    return getGeneralData().getBackgroundPlaybackShortcut() == PlayerData.BACKGROUND_PLAYBACK_SHORTCUT_BACK ||
     //            getGeneralData().getBackgroundPlaybackShortcut() == PlayerData.BACKGROUND_PLAYBACK_SHORTCUT_HOME_BACK;
     //}
-    }
+            }
