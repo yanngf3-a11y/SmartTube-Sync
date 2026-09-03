@@ -1,556 +1,110 @@
 package com.liskovsoft.smartyoutubetv2.tv.sync;
 
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+import android.widget.Toast;
+
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
-import org.json.JSONObject;
 
 import java.net.InetSocketAddress;
 
 /**
+ * Servidor WebSocket que corre dentro de cada pantalla (TV).
+ * Recibe comandos JSON del teléfono controlador y los ejecuta sobre el reproductor.
+ *
+ * YG Sync diagnostic: los callbacks de WebSocketServer corren en un hilo
+ * propio de la librería, no en el hilo principal. bind() ocurre de forma
+ * asíncrona dentro de start(), así que un fallo de bind (ej. puerto
+ * ocupado) NO lanza una excepción capturable en el try/catch del llamador:
+ * se reporta únicamente vía onError(). Antes ese método estaba vacío,
+ * por lo que un fallo de arranque era invisible. Ahora se muestra en
+ * pantalla con Toast (posteado al hilo principal con Handler) para poder
+ * diagnosticar sin Logcat.
+ */
+public class SyncWebSocketServer extends WebSocketServer {
 
-* Servidor WebSocket de YG Sync.
+    private static final String TAG =
+            SyncWebSocketServer.class.getSimpleName();
 
-* 
+    private final SyncPlayerBridge mPlayerBridge;
+    private final Context mContext;
+    private final Handler mMainHandler =
+            new Handler(Looper.getMainLooper());
 
-* Corre dentro de cada pantalla/TV y recibe comandos JSON
-
-* enviados por el controlador Android.
-
-* 
-
-* Puerto utilizado por YG Sync:
-
-* TCP 8765
-
-* 
-
-* El descubrimiento de dispositivos continúa utilizando UDP 8766.
-  */
-  public class SyncWebSocketServer extends WebSocketServer {
-  
-  private final SyncPlayerBridge mPlayerBridge;
-  
-  public SyncWebSocketServer(
-  int port,
-  SyncPlayerBridge playerBridge
-  ) {
-  super(new InetSocketAddress(port));
-  
-   mPlayerBridge = playerBridge;
-
- setReuseAddr(true);
-  
-  }
-  
-  @Override
-  public void onOpen(
-  WebSocket conn,
-  ClientHandshake handshake
-  ) {
-  
-   if (conn == null) {
-     return;
- }
-
- /*
-  * Confirmamos inmediatamente la conexión.
-  *
-  * Esto permite que el controlador sepa que realmente
-  * está conectado a un receptor YG Sync.
-  */
- try {
-
-     JSONObject response =
-             new JSONObject();
-
-     response.put(
-             "type",
-             "hello"
-     );
-
-     response.put(
-             "commandId",
-             ""
-     );
-
-     response.put(
-             "senderId",
-             "ygsync-receiver"
-     );
-
-     response.put(
-             "timestamp",
-             System.currentTimeMillis()
-     );
-
-     JSONObject payload =
-             new JSONObject();
-
-     payload.put(
-             "name",
-             "YG Sync SmartTube"
-     );
-
-     payload.put(
-             "port",
-             getPort()
-     );
-
-     payload.put(
-             "protocol",
-             "ygsync-v1"
-     );
-
-     payload.put(
-             "success",
-             true
-     );
-
-     response.put(
-             "payload",
-             payload
-     );
-
-     conn.send(
-             response.toString()
-     );
-
- } catch (Exception ignored) {
-     // Nunca dejar que un error de respuesta cierre el servidor.
- }
-  
-  }
-  
-  @Override
-  public void onClose(
-  WebSocket conn,
-  int code,
-  String reason,
-  boolean remote
-  ) {
-  // La conexión se cerró. No se requiere ninguna acción.
-  }
-  
-  @Override
-  public void onMessage(
-  WebSocket conn,
-  String message
-  ) {
-  
-   if (
-         conn == null ||
-         message == null ||
-         message.trim().isEmpty()
- ) {
-     return;
- }
-
- SyncMessage parsed =
-         SyncMessage.fromJson(message);
-
- if (parsed == null) {
-
-     sendError(
-             conn,
-             "",
-             "INVALID_MESSAGE",
-             "Mensaje JSON inválido"
-     );
-
-     return;
- }
-
- /*
-  * PING no necesita pasar por el reproductor.
-  * Respondemos inmediatamente para medir latencia.
-  */
- if ("ping".equalsIgnoreCase(parsed.type)) {
-
-     sendPong(
-             conn,
-             parsed.commandId
-     );
-
-     return;
- }
-
- /*
-  * GET STATUS devuelve el estado actual del reproductor.
-  */
- if (
-         "getStatus".equalsIgnoreCase(parsed.type) ||
-         "status".equalsIgnoreCase(parsed.type)
- ) {
-
-     sendStatus(
-             conn,
-             parsed.commandId
-     );
-
-     return;
- }
-
- /*
-  * Ejecutamos el comando sobre SmartTube.
-  */
- try {
-
-     SyncCommand.execute(
-             parsed,
-             mPlayerBridge
-     );
-
-     /*
-      * ACK de aplicación.
-      *
-      * Importante:
-      * recibir este ACK significa que el servidor recibió
-      * y procesó el comando, no simplemente que el socket
-      * pudo escribir los datos.
-      */
-     sendAck(
-             conn,
-             parsed.commandId,
-             parsed.type
-     );
-
- } catch (Exception error) {
-
-     sendError(
-             conn,
-             parsed.commandId,
-             "COMMAND_ERROR",
-             error.getMessage()
-     );
- }
-  
-  }
-  
-  @Override
-  public void onError(
-  WebSocket conn,
-  Exception ex
-  ) {
-  
-   /*
-  * Los errores de una conexión individual no deben
-  * tumbar el proceso de SmartTube.
-  */
-  
-  }
-  
-  @Override
-  public void onStart() {
-  /*
-  * Servidor WebSocket iniciado correctamente.
-  */
-  }
-  
-  /**
-  
-  * Respuesta PONG para comprobar conectividad y latencia.
-    */
-    private void sendPong(
-    WebSocket conn,
-    String commandId
+    public SyncWebSocketServer(
+            int port,
+            SyncPlayerBridge playerBridge,
+            Context context
     ) {
-    
-    if (conn == null || !conn.isOpen()) {
-    return;
+        super(new InetSocketAddress(port));
+        mPlayerBridge = playerBridge;
+        mContext = context.getApplicationContext();
+        setReuseAddr(true);
     }
-    
-    try {
-    
-     JSONObject response =
-         new JSONObject();
 
- response.put(
-         "type",
-         "pong"
- );
-
- response.put(
-         "commandId",
-         commandId == null
-                 ? ""
-                 : commandId
- );
-
- response.put(
-         "senderId",
-         "ygsync-receiver"
- );
-
- response.put(
-         "timestamp",
-         System.currentTimeMillis()
- );
-
- JSONObject payload =
-         new JSONObject();
-
- payload.put(
-         "success",
-         true
- );
-
- payload.put(
-         "serverTimestampMs",
-         System.currentTimeMillis()
- );
-
- response.put(
-         "payload",
-         payload
- );
-
- conn.send(
-         response.toString()
- );
-    
-    } catch (Exception ignored) {
+    @Override
+    public void onOpen(WebSocket conn, ClientHandshake handshake) {
+        // Un controlador se conectó.
+        Log.d(TAG, "YG Sync: cliente conectado");
+        showDiagnostic("YG SYNC — CLIENTE CONECTADO");
     }
+
+    @Override
+    public void onClose(WebSocket conn, int code, String reason, boolean remote) {
+        // Conexión cerrada.
+        Log.d(TAG, "YG Sync: cliente desconectado (" + reason + ")");
+        showDiagnostic("YG SYNC — CLIENTE DESCONECTADO");
     }
-  
-  /**
-  
-  * ACK de comando procesado.
-    */
-    private void sendAck(
-    WebSocket conn,
-    String commandId,
-    String commandType
-    ) {
-    
-    if (conn == null || !conn.isOpen()) {
-    return;
+
+    @Override
+    public void onMessage(WebSocket conn, String message) {
+        SyncMessage parsed = SyncMessage.fromJson(message);
+        if (parsed != null) {
+            SyncCommand.execute(parsed, mPlayerBridge);
+        }
     }
-    
-    try {
-    
-     JSONObject response =
-         new JSONObject();
 
- response.put(
-         "type",
-         "ack"
- );
+    @Override
+    public void onError(WebSocket conn, Exception ex) {
+        // YG Sync diagnostic: antes este método estaba vacío y tragaba
+        // en silencio fallos de bind del puerto. Ahora se reporta.
+        String message =
+                ex != null
+                        ? ex.getMessage()
+                        : "desconocido";
 
- response.put(
-         "commandId",
-         commandId == null
-                 ? ""
-                 : commandId
- );
+        Log.e(TAG, "YG Sync WebSocket error: " + message, ex);
 
- response.put(
-         "senderId",
-         "ygsync-receiver"
- );
-
- response.put(
-         "timestamp",
-         System.currentTimeMillis()
- );
-
- JSONObject payload =
-         new JSONObject();
-
- payload.put(
-         "success",
-         true
- );
-
- payload.put(
-         "command",
-         commandType == null
-                 ? ""
-                 : commandType
- );
-
- response.put(
-         "payload",
-         payload
- );
-
- conn.send(
-         response.toString()
- );
-    
-    } catch (Exception ignored) {
+        showDiagnostic("YG SYNC — ERROR: " + message);
     }
+
+    @Override
+    public void onStart() {
+        // Servidor arrancado correctamente y escuchando en el puerto configurado.
+        Log.d(TAG, "YG Sync WebSocket server started on port " + getPort());
+        showDiagnostic("YG SYNC — TCP OK (puerto " + getPort() + ")");
     }
-  
-  /**
-  
-  * Estado actual del reproductor.
-    */
-    private void sendStatus(
-    WebSocket conn,
-    String commandId
-    ) {
-    
-    if (
-    conn == null ||
-    !conn.isOpen() ||
-    mPlayerBridge == null
-    ) {
-    return;
+
+    private void showDiagnostic(String message) {
+
+        if (mContext == null) {
+            return;
+        }
+
+        mMainHandler.post(() -> {
+            try {
+                Toast.makeText(
+                        mContext,
+                        message,
+                        Toast.LENGTH_SHORT
+                ).show();
+            } catch (Exception e) {
+                Log.e(TAG, "YG Sync diagnostic display error: " + e.getMessage());
+            }
+        });
     }
-    
-    try {
-    
-     JSONObject response =
-         new JSONObject();
-
- response.put(
-         "type",
-         "status"
- );
-
- response.put(
-         "commandId",
-         commandId == null
-                 ? ""
-                 : commandId
- );
-
- response.put(
-         "senderId",
-         "ygsync-receiver"
- );
-
- response.put(
-         "timestamp",
-         System.currentTimeMillis()
- );
-
- JSONObject payload =
-         new JSONObject();
-
- payload.put(
-         "success",
-         true
- );
-
- payload.put(
-         "videoId",
-         safeString(
-                 mPlayerBridge.getVideoId()
-         )
- );
-
- payload.put(
-         "positionMs",
-         Math.max(
-                 0,
-                 mPlayerBridge.getPositionMs()
-         )
- );
-
- payload.put(
-         "isPlaying",
-         mPlayerBridge.isPlaying()
- );
-
- response.put(
-         "payload",
-         payload
- );
-
- conn.send(
-         response.toString()
- );
-    
-    } catch (Exception ignored) {
-    }
-    }
-  
-  /**
-  
-  * Envía un error estructurado al controlador.
-    */
-    private void sendError(
-    WebSocket conn,
-    String commandId,
-    String errorCode,
-    String errorMessage
-    ) {
-    
-    if (conn == null || !conn.isOpen()) {
-    return;
-    }
-    
-    try {
-    
-     JSONObject response =
-         new JSONObject();
-
- response.put(
-         "type",
-         "error"
- );
-
- response.put(
-         "commandId",
-         commandId == null
-                 ? ""
-                 : commandId
- );
-
- response.put(
-         "senderId",
-         "ygsync-receiver"
- );
-
- response.put(
-         "timestamp",
-         System.currentTimeMillis()
- );
-
- JSONObject payload =
-         new JSONObject();
-
- payload.put(
-         "success",
-         false
- );
-
- payload.put(
-         "errorCode",
-         errorCode == null
-                 ? "UNKNOWN_ERROR"
-                 : errorCode
- );
-
- payload.put(
-         "message",
-         errorMessage == null
-                 ? ""
-                 : errorMessage
- );
-
- response.put(
-         "payload",
-         payload
- );
-
- conn.send(
-         response.toString()
- );
-    
-    } catch (Exception ignored) {
-    }
-    }
-  
-  private String safeString(
-  String value
-  ) {
-  
-   return value == null
-         ? ""
-         : value;
-  
-  }
-     }
+}
