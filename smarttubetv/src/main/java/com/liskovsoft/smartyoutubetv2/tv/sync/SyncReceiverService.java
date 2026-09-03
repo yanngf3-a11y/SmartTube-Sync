@@ -2,135 +2,76 @@ package com.liskovsoft.smartyoutubetv2.tv.sync;
 
 import android.app.Service;
 import android.content.Intent;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 /**
+ * Servicio Android que mantiene vivo el SyncWebSocketServer mientras la pantalla
+ * está lista para recibir comandos de sincronización desde el teléfono.
+ *
+ * YG Sync diagnostic: se agregaron Toasts visibles en el arranque y en
+ * cualquier fallo, porque previamente un error de arranque quedaba
+ * completamente en silencio (ver comentario en SyncWebSocketServer.onError).
+ */
+public class SyncReceiverService extends Service {
+    private static final String TAG = SyncReceiverService.class.getSimpleName();
+    private static final int SYNC_PORT = 8765;
 
-* Servicio Android que mantiene activo el servidor WebSocket
+    private SyncWebSocketServer mServer;
 
-* de YG Sync desde el arranque de SmartTube.
+    @Override
+    public void onCreate() {
+        super.onCreate();
 
-* 
+        Log.d(TAG, "YG Sync: iniciando servicio");
+        showDiagnostic("YG SYNC — INICIANDO SERVICIO");
 
-* Transporte:
+        SyncPlayerBridge bridge = new SyncPlaybackBridge(getApplicationContext());
+        mServer = new SyncWebSocketServer(SYNC_PORT, bridge, getApplicationContext());
 
-* 
+        try {
+            mServer.start();
+            Log.d(TAG, "YG Sync: WebSocket iniciado en TCP " + SYNC_PORT);
+        } catch (Exception e) {
+            Log.e(TAG, "YG Sync: ERROR iniciando WebSocket", e);
+            showDiagnostic("YG SYNC — ERROR AL INICIAR: " + e.getMessage());
+        }
+    }
 
-* TCP 8765 = WebSocket
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        // START_STICKY: si Android mata el servicio, intenta recrearlo.
+        return START_STICKY;
+    }
 
-* 
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
 
-* UDP 8766 = descubrimiento de dispositivos
-  */
-  public class SyncReceiverService extends Service {
-  
-  private static final String TAG =
-  SyncReceiverService.class.getSimpleName();
-  
-  private static final int SYNC_PORT =
-  8765;
-  
-  private SyncWebSocketServer mServer;
-  
-  @Override
-  public void onCreate() {
-  
-   super.onCreate();
+        if (mServer != null) {
+            try {
+                mServer.stop();
+            } catch (Exception e) {
+                Log.e(TAG, "Error al detener el servidor de sincronizacion", e);
+            }
+        }
+    }
 
- Log.i(
-         TAG,
-         "YG Sync: iniciando servicio"
- );
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
 
- try {
-
-     SyncPlayerBridge bridge =
-             new SyncPlaybackBridge(
-                     getApplicationContext()
-             );
-
-     mServer =
-             new SyncWebSocketServer(
-                     SYNC_PORT,
-                     bridge
-             );
-
-     mServer.start();
-
-     Log.i(
-             TAG,
-             "YG Sync: WebSocket iniciado en TCP "
-                     + SYNC_PORT
-     );
-
- } catch (Exception e) {
-
-     Log.e(
-             TAG,
-             "YG Sync: ERROR iniciando WebSocket",
-             e
-     );
-
-     mServer =
-             null;
- }
-  
-  }
-  
-  @Override
-  public int onStartCommand(
-  Intent intent,
-  int flags,
-  int startId
-  ) {
-  
-   Log.i(
-         TAG,
-         "YG Sync: servicio activo"
- );
-
- return START_STICKY;
-  
-  }
-  
-  @Override
-  public void onDestroy() {
-  
-   Log.i(
-         TAG,
-         "YG Sync: deteniendo servicio"
- );
-
- if (mServer != null) {
-
-     try {
-
-         mServer.stop();
-
-     } catch (Exception e) {
-
-         Log.e(
-                 TAG,
-                 "YG Sync: error deteniendo WebSocket",
-                 e
-         );
-     }
-
-     mServer =
-             null;
- }
-
- super.onDestroy();
-  
-  }
-  
-  @Override
-  public IBinder onBind(
-  Intent intent
-  ) {
-  
-   return null;
-  
-  }
-  }
+    private void showDiagnostic(String message) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                Toast.makeText(getApplicationContext(), message, Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Log.e(TAG, "YG Sync diagnostic display error: " + e.getMessage());
+            }
+        });
+    }
+}
