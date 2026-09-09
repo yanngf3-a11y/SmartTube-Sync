@@ -155,6 +155,9 @@ jobs:
           cp ./smarttubetv/build/outputs/apk/stbeta/release/*_x86.apk \
             "release-files/YG-Sync-SmartTube_${{ steps.get_version.outputs.VERSION_NAME }}_x86.apk"
 
+          cp ./smarttubetv/build/outputs/apk/stbeta/debug/*_universal.apk \
+            "release-files/YG-Sync-SmartTube_${{ steps.get_version.outputs.VERSION_NAME }}_DEBUG_universal.apk"
+
           cp ./controller/build/outputs/apk/debug/*.apk \
             "release-files/YG-Sync-Controller.apk"
 
