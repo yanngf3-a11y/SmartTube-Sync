@@ -52,13 +52,8 @@ public class SyncReceiverService extends Service {
         );
 
         /*
-         * IMPORTANTE:
-         *
          * El servicio debe convertirse en foreground antes
          * de iniciar el servidor WebSocket.
-         *
-         * Esto evita que Android destruya el servicio mientras
-         * el controlador intenta conectarse.
          */
         if (!startForegroundService()) {
 
@@ -366,15 +361,12 @@ public class SyncReceiverService extends Service {
                             android.R.drawable.ic_media_play
                     )
                     .setOngoing(true)
-                    .setCategory(
-                            Notification.CATEGORY_SERVICE
-                    )
                     .setVisibility(
                             Notification.VISIBILITY_PUBLIC
                     )
                     .build();
 
-        } else {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 
             return new Notification.Builder(
                     this
@@ -389,9 +381,31 @@ public class SyncReceiverService extends Service {
                             android.R.drawable.ic_media_play
                     )
                     .setOngoing(true)
-                    .setCategory(
-                            Notification.CATEGORY_SERVICE
+                    .setVisibility(
+                            Notification.VISIBILITY_PUBLIC
                     )
+                    .build();
+
+        } else {
+
+            /*
+             * Android 17-20.
+             *
+             * No se utilizan métodos introducidos posteriormente.
+             */
+            return new Notification.Builder(
+                    this
+            )
+                    .setContentTitle(
+                            "YG Sync Receiver"
+                    )
+                    .setContentText(
+                            "Esperando conexión del controlador"
+                    )
+                    .setSmallIcon(
+                            android.R.drawable.ic_media_play
+                    )
+                    .setOngoing(true)
                     .build();
         }
     }
