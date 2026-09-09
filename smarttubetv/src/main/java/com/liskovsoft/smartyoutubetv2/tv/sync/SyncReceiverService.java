@@ -10,11 +10,10 @@ import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncDiscoveryServer;
+
 /**
  * Servicio foreground de YG Sync.
- *
- * Mantiene activo el servidor WebSocket que recibe los comandos
- * del YG Sync Controller.
  *
  * Arquitectura:
  *
@@ -27,6 +26,7 @@ public class SyncReceiverService extends Service {
             SyncReceiverService.class.getSimpleName();
 
     private static final int SYNC_PORT = 8765;
+    private static final int DISCOVERY_PORT = 8766;
 
     private static final int NOTIFICATION_ID = 8765;
 
@@ -38,25 +38,16 @@ public class SyncReceiverService extends Service {
 
     private SyncWebSocketServer mServer;
 
+    private YgSyncDiscoveryServer mDiscoveryServer;
+
     @Override
     public void onCreate() {
         super.onCreate();
 
-        Log.d(
-                TAG,
-                "YG Sync: onCreate()"
-        );
+        Log.d(TAG, "YG Sync: onCreate()");
+        showDiagnostic("YG SYNC — INICIANDO SERVICIO");
 
-        showDiagnostic(
-                "YG SYNC — INICIANDO SERVICIO"
-        );
-
-        /*
-         * El servicio debe convertirse en foreground antes
-         * de iniciar el servidor WebSocket.
-         */
         if (!startForegroundService()) {
-
             Log.e(
                     TAG,
                     "YG Sync: no se pudo iniciar foreground"
@@ -69,10 +60,54 @@ public class SyncReceiverService extends Service {
             return;
         }
 
-        /*
-         * Crear el bridge entre YG Sync y el reproductor
-         * interno de SmartTube.
-         */
+        startDiscoveryServer();
+
+        startWebSocketServer();
+    }
+
+    private void startDiscoveryServer() {
+
+        try {
+
+            mDiscoveryServer =
+                    new YgSyncDiscoveryServer(
+                            getApplicationContext()
+                    );
+
+            mDiscoveryServer.start();
+
+            Log.d(
+                    TAG,
+                    "YG Sync: descubrimiento UDP "
+                            + DISCOVERY_PORT
+                            + " iniciado"
+            );
+
+            showDiagnostic(
+                    "YG SYNC — UDP "
+                            + DISCOVERY_PORT
+                            + " ACTIVO"
+            );
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync: ERROR iniciando discovery",
+                    e
+            );
+
+            showDiagnostic(
+                    "YG SYNC — ERROR UDP: "
+                            + safeMessage(e)
+            );
+
+            mDiscoveryServer = null;
+        }
+    }
+
+    private void startWebSocketServer() {
+
         try {
 
             SyncPlayerBridge bridge =
@@ -80,10 +115,6 @@ public class SyncReceiverService extends Service {
                             getApplicationContext()
                     );
 
-            /*
-             * TCP 8765:
-             * servidor WebSocket único.
-             */
             mServer =
                     new SyncWebSocketServer(
                             SYNC_PORT,
@@ -115,9 +146,6 @@ public class SyncReceiverService extends Service {
             return;
         }
 
-        /*
-         * Iniciar servidor WebSocket.
-         */
         try {
 
             mServer.start();
@@ -166,9 +194,6 @@ public class SyncReceiverService extends Service {
         }
     }
 
-    /**
-     * Inicia correctamente el servicio como foreground.
-     */
     private boolean startForegroundService() {
 
         try {
@@ -178,14 +203,6 @@ public class SyncReceiverService extends Service {
             Notification notification =
                     createNotification();
 
-            /*
-             * startForeground() funciona desde API 21.
-             *
-             * El tipo mediaPlayback ya está declarado en el
-             * AndroidManifest.xml:
-             *
-             * android:foregroundServiceType="mediaPlayback"
-             */
             startForeground(
                     NOTIFICATION_ID,
                     notification
@@ -222,10 +239,6 @@ public class SyncReceiverService extends Service {
                 "YG Sync: onStartCommand()"
         );
 
-        /*
-         * Si Android destruye el servicio, solicita que
-         * vuelva a crearlo cuando sea posible.
-         */
         return START_STICKY;
     }
 
@@ -241,9 +254,6 @@ public class SyncReceiverService extends Service {
                 "YG SYNC — SERVICIO DETENIDO"
         );
 
-        /*
-         * Detener WebSocket correctamente.
-         */
         if (mServer != null) {
 
             try {
@@ -267,9 +277,30 @@ public class SyncReceiverService extends Service {
             mServer = null;
         }
 
-        /*
-         * Quitar el servicio foreground.
-         */
+        if (mDiscoveryServer != null) {
+
+            try {
+
+                Log.d(
+                        TAG,
+                        "YG Sync: deteniendo discovery UDP "
+                                + DISCOVERY_PORT
+                );
+
+                mDiscoveryServer.stop();
+
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "YG Sync: error deteniendo discovery",
+                        e
+                );
+            }
+
+            mDiscoveryServer = null;
+        }
+
         try {
 
             stopForeground(true);
@@ -291,12 +322,11 @@ public class SyncReceiverService extends Service {
         return null;
     }
 
-    /**
-     * Crea el canal de notificación requerido desde Android 8.
-     */
     private void createNotificationChannel() {
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT <
+                Build.VERSION_CODES.O) {
+
             return;
         }
 
@@ -337,15 +367,10 @@ public class SyncReceiverService extends Service {
         }
     }
 
-    /**
-     * Crea la notificación permanente del servicio.
-     *
-     * Se utiliza Notification.Builder nativo para evitar
-     * depender de una versión concreta de androidx.core.
-     */
     private Notification createNotification() {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.O) {
 
             return new Notification.Builder(
                     this,
@@ -366,7 +391,10 @@ public class SyncReceiverService extends Service {
                     )
                     .build();
 
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        } else if (
+                Build.VERSION.SDK_INT >=
+                        Build.VERSION_CODES.LOLLIPOP
+        ) {
 
             return new Notification.Builder(
                     this
@@ -388,11 +416,6 @@ public class SyncReceiverService extends Service {
 
         } else {
 
-            /*
-             * Android 17-20.
-             *
-             * No se utilizan métodos introducidos posteriormente.
-             */
             return new Notification.Builder(
                     this
             )
@@ -410,9 +433,6 @@ public class SyncReceiverService extends Service {
         }
     }
 
-    /**
-     * Muestra información de diagnóstico durante las pruebas.
-     */
     private void showDiagnostic(String message) {
 
         try {
@@ -433,9 +453,6 @@ public class SyncReceiverService extends Service {
         }
     }
 
-    /**
-     * Obtiene un mensaje seguro de una excepción.
-     */
     private String safeMessage(Exception e) {
 
         if (e == null) {
@@ -456,4 +473,4 @@ public class SyncReceiverService extends Service {
 
         return message;
     }
-}
+                }
