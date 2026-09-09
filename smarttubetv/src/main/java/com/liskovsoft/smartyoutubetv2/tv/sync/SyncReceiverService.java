@@ -10,17 +10,16 @@ import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
 
-import androidx.core.app.NotificationCompat;
-
 /**
- * Servicio foreground que mantiene vivo el SyncWebSocketServer
- * mientras SmartTube está funcionando.
+ * Servicio foreground de YG Sync.
  *
- * YG Sync:
+ * Mantiene activo el servidor WebSocket que recibe los comandos
+ * del YG Sync Controller.
+ *
+ * Arquitectura:
+ *
+ * UDP 8766 = descubrimiento
  * TCP 8765 = WebSocket de control
- *
- * El servicio se ejecuta como foreground para evitar que Android
- * lo destruya inmediatamente después de iniciar la conexión.
  */
 public class SyncReceiverService extends Service {
 
@@ -29,11 +28,13 @@ public class SyncReceiverService extends Service {
 
     private static final int SYNC_PORT = 8765;
 
-    private static final int NOTIFICATION_ID =
-            8765;
+    private static final int NOTIFICATION_ID = 8765;
 
     private static final String CHANNEL_ID =
             "ygsync_receiver";
+
+    private static final String CHANNEL_NAME =
+            "YG Sync";
 
     private SyncWebSocketServer mServer;
 
@@ -51,50 +52,31 @@ public class SyncReceiverService extends Service {
         );
 
         /*
-         * Primero convertimos el servicio en FOREGROUND.
+         * IMPORTANTE:
          *
-         * Esto es importante porque START_STICKY por sí solo
-         * no garantiza que Android mantenga vivo el servicio.
+         * El servicio debe convertirse en foreground antes
+         * de iniciar el servidor WebSocket.
+         *
+         * Esto evita que Android destruya el servicio mientras
+         * el controlador intenta conectarse.
          */
-        try {
-
-            createNotificationChannel();
-
-            Notification notification =
-                    createNotification();
-
-            startForeground(
-                    NOTIFICATION_ID,
-                    notification
-            );
-
-            Log.d(
-                    TAG,
-                    "YG Sync: servicio FOREGROUND activo"
-            );
-
-        } catch (Exception e) {
+        if (!startForegroundService()) {
 
             Log.e(
                     TAG,
-                    "YG Sync: ERROR iniciando foreground",
-                    e
+                    "YG Sync: no se pudo iniciar foreground"
             );
 
             showDiagnostic(
-                    "YG SYNC — ERROR FOREGROUND: "
-                            + safeMessage(e)
+                    "YG SYNC — ERROR FOREGROUND"
             );
 
-            /*
-             * No continuamos iniciando el servidor si no podemos
-             * establecer correctamente el servicio foreground.
-             */
             return;
         }
 
         /*
-         * Crear el bridge que conecta YG Sync con SmartTube.
+         * Crear el bridge entre YG Sync y el reproductor
+         * interno de SmartTube.
          */
         try {
 
@@ -104,7 +86,8 @@ public class SyncReceiverService extends Service {
                     );
 
             /*
-             * Un único servidor WebSocket debe ocupar TCP 8765.
+             * TCP 8765:
+             * servidor WebSocket único.
              */
             mServer =
                     new SyncWebSocketServer(
@@ -115,14 +98,15 @@ public class SyncReceiverService extends Service {
 
             Log.d(
                     TAG,
-                    "YG Sync: servidor WebSocket creado"
+                    "YG Sync: servidor WebSocket creado en TCP "
+                            + SYNC_PORT
             );
 
         } catch (Exception e) {
 
             Log.e(
                     TAG,
-                    "YG Sync: ERROR creando WebSocket",
+                    "YG Sync: ERROR creando servidor WebSocket",
                     e
             );
 
@@ -131,11 +115,13 @@ public class SyncReceiverService extends Service {
                             + safeMessage(e)
             );
 
+            mServer = null;
+
             return;
         }
 
         /*
-         * Iniciar WebSocket.
+         * Iniciar servidor WebSocket.
          */
         try {
 
@@ -166,10 +152,6 @@ public class SyncReceiverService extends Service {
                             + safeMessage(e)
             );
 
-            /*
-             * Si el servidor no pudo arrancar, liberamos
-             * la instancia para permitir una futura recreación.
-             */
             try {
 
                 if (mServer != null) {
@@ -180,12 +162,56 @@ public class SyncReceiverService extends Service {
 
                 Log.e(
                         TAG,
-                        "YG Sync: error limpiando servidor",
+                        "YG Sync: error limpiando WebSocket",
                         stopError
                 );
             }
 
             mServer = null;
+        }
+    }
+
+    /**
+     * Inicia correctamente el servicio como foreground.
+     */
+    private boolean startForegroundService() {
+
+        try {
+
+            createNotificationChannel();
+
+            Notification notification =
+                    createNotification();
+
+            /*
+             * startForeground() funciona desde API 21.
+             *
+             * El tipo mediaPlayback ya está declarado en el
+             * AndroidManifest.xml:
+             *
+             * android:foregroundServiceType="mediaPlayback"
+             */
+            startForeground(
+                    NOTIFICATION_ID,
+                    notification
+            );
+
+            Log.d(
+                    TAG,
+                    "YG Sync: servicio foreground activo"
+            );
+
+            return true;
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync: ERROR en startForeground()",
+                    e
+            );
+
+            return false;
         }
     }
 
@@ -202,8 +228,8 @@ public class SyncReceiverService extends Service {
         );
 
         /*
-         * Si Android mata el proceso, solicita que el servicio
-         * vuelva a ser creado.
+         * Si Android destruye el servicio, solicita que
+         * vuelva a crearlo cuando sea posible.
          */
         return START_STICKY;
     }
@@ -220,6 +246,9 @@ public class SyncReceiverService extends Service {
                 "YG SYNC — SERVICIO DETENIDO"
         );
 
+        /*
+         * Detener WebSocket correctamente.
+         */
         if (mServer != null) {
 
             try {
@@ -235,12 +264,28 @@ public class SyncReceiverService extends Service {
 
                 Log.e(
                         TAG,
-                        "YG Sync: error al detener WebSocket",
+                        "YG Sync: error deteniendo WebSocket",
                         e
                 );
             }
 
             mServer = null;
+        }
+
+        /*
+         * Quitar el servicio foreground.
+         */
+        try {
+
+            stopForeground(true);
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync: error quitando foreground",
+                    e
+            );
         }
 
         super.onDestroy();
@@ -252,7 +297,7 @@ public class SyncReceiverService extends Service {
     }
 
     /**
-     * Crea el canal de notificación requerido por Android 8+.
+     * Crea el canal de notificación requerido desde Android 8.
      */
     private void createNotificationChannel() {
 
@@ -260,60 +305,100 @@ public class SyncReceiverService extends Service {
             return;
         }
 
-        NotificationChannel channel =
-                new NotificationChannel(
-                        CHANNEL_ID,
-                        "YG Sync",
-                        NotificationManager.IMPORTANCE_LOW
+        try {
+
+            NotificationChannel channel =
+                    new NotificationChannel(
+                            CHANNEL_ID,
+                            CHANNEL_NAME,
+                            NotificationManager.IMPORTANCE_LOW
+                    );
+
+            channel.setDescription(
+                    "Servicio receptor de YG Sync"
+            );
+
+            channel.setShowBadge(false);
+
+            NotificationManager manager =
+                    getSystemService(
+                            NotificationManager.class
+                    );
+
+            if (manager != null) {
+
+                manager.createNotificationChannel(
+                        channel
                 );
+            }
 
-        channel.setDescription(
-                "Servicio de sincronización de SmartTube"
-        );
+        } catch (Exception e) {
 
-        channel.setShowBadge(false);
-
-        NotificationManager manager =
-                getSystemService(
-                        NotificationManager.class
-                );
-
-        if (manager != null) {
-
-            manager.createNotificationChannel(
-                    channel
+            Log.e(
+                    TAG,
+                    "YG Sync: error creando canal",
+                    e
             );
         }
     }
 
     /**
-     * Notificación permanente del servicio foreground.
+     * Crea la notificación permanente del servicio.
+     *
+     * Se utiliza Notification.Builder nativo para evitar
+     * depender de una versión concreta de androidx.core.
      */
     private Notification createNotification() {
 
-        return new NotificationCompat.Builder(
-                this,
-                CHANNEL_ID
-        )
-                .setContentTitle(
-                        "YG Sync Receiver"
-                )
-                .setContentText(
-                        "Esperando conexión del controlador"
-                )
-                .setSmallIcon(
-                        android.R.drawable.ic_media_play
-                )
-                .setOngoing(true)
-                .setCategory(
-                        NotificationCompat.CATEGORY_SERVICE
-                )
-                .setPriority(
-                        NotificationCompat.PRIORITY_LOW
-                )
-                .build();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+            return new Notification.Builder(
+                    this,
+                    CHANNEL_ID
+            )
+                    .setContentTitle(
+                            "YG Sync Receiver"
+                    )
+                    .setContentText(
+                            "Esperando conexión del controlador"
+                    )
+                    .setSmallIcon(
+                            android.R.drawable.ic_media_play
+                    )
+                    .setOngoing(true)
+                    .setCategory(
+                            Notification.CATEGORY_SERVICE
+                    )
+                    .setVisibility(
+                            Notification.VISIBILITY_PUBLIC
+                    )
+                    .build();
+
+        } else {
+
+            return new Notification.Builder(
+                    this
+            )
+                    .setContentTitle(
+                            "YG Sync Receiver"
+                    )
+                    .setContentText(
+                            "Esperando conexión del controlador"
+                    )
+                    .setSmallIcon(
+                            android.R.drawable.ic_media_play
+                    )
+                    .setOngoing(true)
+                    .setCategory(
+                            Notification.CATEGORY_SERVICE
+                    )
+                    .build();
+        }
     }
 
+    /**
+     * Muestra información de diagnóstico durante las pruebas.
+     */
     private void showDiagnostic(String message) {
 
         try {
@@ -328,12 +413,15 @@ public class SyncReceiverService extends Service {
 
             Log.e(
                     TAG,
-                    "YG Sync diagnostic display error: "
+                    "YG Sync: error mostrando diagnóstico: "
                             + e.getMessage()
             );
         }
     }
 
+    /**
+     * Obtiene un mensaje seguro de una excepción.
+     */
     private String safeMessage(Exception e) {
 
         if (e == null) {
@@ -343,8 +431,10 @@ public class SyncReceiverService extends Service {
         String message =
                 e.getMessage();
 
-        if (message == null ||
-                message.trim().isEmpty()) {
+        if (
+                message == null ||
+                message.trim().isEmpty()
+        ) {
 
             return e.getClass()
                     .getSimpleName();
@@ -352,4 +442,4 @@ public class SyncReceiverService extends Service {
 
         return message;
     }
-            }
+}
