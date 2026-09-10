@@ -3,16 +3,28 @@ package com.liskovsoft.smartyoutubetv2.tv.sync;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.PlaybackPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.PlaybackView;
 
 public class SyncPlaybackBridge implements SyncPlayerBridge {
 
+    private static final String TAG =
+            "SyncPlaybackBridge";
+
     private final Context mContext;
 
     private final Handler mMainHandler =
             new Handler(Looper.getMainLooper());
+
+    /*
+     * Último vídeo solicitado por YG Sync.
+     *
+     * Se registra ANTES de enviar openVideo() al
+     * PlaybackPresenter porque openVideo() es asíncrono.
+     */
+    private volatile String mRequestedVideoId;
 
     public SyncPlaybackBridge(Context context) {
         mContext =
@@ -46,7 +58,13 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                     );
                 }
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "Error en play()",
+                        e
+                );
             }
         });
     }
@@ -68,7 +86,13 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                     );
                 }
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "Error en pause()",
+                        e
+                );
             }
         });
     }
@@ -98,7 +122,13 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                     );
                 }
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "Error en seekTo()",
+                        e
+                );
             }
         });
     }
@@ -112,6 +142,11 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                 videoId == null ||
                 videoId.trim().isEmpty()
         ) {
+            Log.w(
+                    TAG,
+                    "openVideo() recibió videoId vacío"
+            );
+
             return;
         }
 
@@ -119,15 +154,23 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                 videoId.trim();
 
         /*
-         * IMPORTANTE:
+         * MUY IMPORTANTE:
          *
-         * PlaybackPresenter.openVideo()
-         * modifica el estado de SmartTube y
-         * arranca PlaybackView.
+         * Registramos inmediatamente el vídeo solicitado.
          *
-         * Nunca lo ejecutamos directamente
-         * desde el hilo del WebSocket.
+         * El WebSocket puede preguntar getVideoId()
+         * antes de que PlaybackPresenter termine de
+         * actualizar getVideo().
          */
+        mRequestedVideoId =
+                cleanVideoId;
+
+        Log.d(
+                TAG,
+                "OPEN solicitado: "
+                        + cleanVideoId
+        );
+
         mMainHandler.post(() -> {
 
             try {
@@ -135,11 +178,24 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                 PlaybackPresenter p =
                         presenter();
 
+                Log.d(
+                        TAG,
+                        "Ejecutando PlaybackPresenter.openVideo(): "
+                                + cleanVideoId
+                );
+
                 p.openVideo(
                         cleanVideoId
                 );
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "Error ejecutando openVideo(): "
+                                + cleanVideoId,
+                        e
+                );
             }
         });
     }
@@ -154,7 +210,13 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                 presenter()
                         .onNextClicked();
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "Error en next()",
+                        e
+                );
             }
         });
     }
@@ -169,7 +231,13 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                 presenter()
                         .onPreviousClicked();
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "Error en previous()",
+                        e
+                );
             }
         });
     }
@@ -202,7 +270,13 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                     );
                 }
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "Error en setVolume()",
+                        e
+                );
             }
         });
     }
@@ -210,13 +284,6 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
     @Override
     public long getPositionMs() {
 
-        /*
-         * Esta función puede ser llamada desde
-         * el hilo de sincronización.
-         *
-         * El PlaybackView debe consultarse de
-         * forma segura.
-         */
         try {
 
             PlaybackView v =
@@ -231,7 +298,7 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                     v.getPositionMs()
             );
 
-        } catch (Exception ignored) {
+        } catch (Exception e) {
 
             return 0;
         }
@@ -245,7 +312,7 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
             return presenter()
                     .isPlaying();
 
-        } catch (Exception ignored) {
+        } catch (Exception e) {
 
             return false;
         }
@@ -254,16 +321,85 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
     @Override
     public String getVideoId() {
 
+        /*
+         * Primero intentamos obtener el ID real
+         * que SmartTube ya tiene cargado.
+         */
         try {
 
-            if (presenter().getVideo() != null) {
+            PlaybackPresenter p =
+                    presenter();
 
-                return presenter()
-                        .getVideo()
-                        .videoId;
+            if (p.getVideo() != null) {
+
+                String actualVideoId =
+                        p.getVideo().videoId;
+
+                if (
+                        actualVideoId != null &&
+                        !actualVideoId.trim().isEmpty()
+                ) {
+
+                    actualVideoId =
+                            actualVideoId.trim();
+
+                    /*
+                     * El PlaybackPresenter ya confirmó
+                     * realmente el vídeo.
+                     */
+                    if (
+                            mRequestedVideoId != null &&
+                            mRequestedVideoId.equals(
+                                    actualVideoId
+                            )
+                    ) {
+
+                        Log.d(
+                                TAG,
+                                "VIDEO CONFIRMADO: "
+                                        + actualVideoId
+                        );
+
+                        return actualVideoId;
+                    }
+
+                    return actualVideoId;
+                }
             }
 
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Error obteniendo video real",
+                    e
+            );
+        }
+
+        /*
+         * Si PlaybackPresenter todavía no actualizó
+         * getVideo(), devolvemos el último vídeo solicitado.
+         *
+         * Esto permite que el sistema READY no dependa
+         * exclusivamente de la actualización interna
+         * del Presenter.
+         */
+        String requested =
+                mRequestedVideoId;
+
+        if (
+                requested != null &&
+                !requested.trim().isEmpty()
+        ) {
+
+            Log.d(
+                    TAG,
+                    "VIDEO solicitado todavía no reflejado "
+                            + "en Presenter; usando solicitado: "
+                            + requested
+            );
+
+            return requested;
         }
 
         return null;
@@ -291,7 +427,7 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                     )
             );
 
-        } catch (Exception ignored) {
+        } catch (Exception e) {
 
             return 0.0f;
         }
