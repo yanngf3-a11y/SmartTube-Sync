@@ -2,203 +2,190 @@ package com.liskovsoft.smartyoutubetv2.tv.sync;
 
 public final class SyncCommand {
 
-private static final long SEEK_CORRECTION_THRESHOLD_MS = 250;
+    private static final long SEEK_CORRECTION_THRESHOLD_MS = 250;
 
-private SyncCommand() {
-}
-
-public static void execute(
-        SyncMessage message,
-        SyncPlayerBridge player
-) {
-
-    if (
-            message == null ||
-            player == null
-    ) {
-        return;
+    private SyncCommand() {
     }
 
-    try {
+    public static void execute(
+            SyncMessage message,
+            SyncPlayerBridge player
+    ) {
 
-        String type =
-                message.type == null
-                        ? ""
-                        : message.type.trim();
+        if (
+                message == null ||
+                player == null
+        ) {
+            return;
+        }
 
-        switch (type) {
+        try {
 
-            case "play":
+            String type =
+                    message.type == null
+                            ? ""
+                            : message.type.trim();
 
-                player.play();
+            switch (type) {
 
-                break;
+                case "play":
 
-            case "pause":
+                    player.play();
 
-                player.pause();
+                    break;
 
-                break;
+                case "pause":
 
-            case "stop":
+                    player.pause();
 
-                player.pause();
-                player.seekTo(0);
+                    break;
 
-                break;
+                case "stop":
 
-            case "seek": {
+                    player.pause();
+                    player.seekTo(0);
 
-                long positionMs =
-                        Math.max(
-                                0,
-                                message.payload.optLong(
-                                        "positionMs",
-                                        0
-                                )
-                        );
+                    break;
 
-                player.seekTo(
-                        positionMs
-                );
+                case "seek": {
 
-                break;
-            }
-
-            case "open": {
-
-                String videoId =
-                        message.payload.optString(
-                                "videoId",
-                                ""
-                        ).trim();
-
-                if (!videoId.isEmpty()) {
-
-                    player.openVideo(
-                            videoId
-                    );
-                }
-
-                break;
-            }
-
-            case "next":
-
-                player.next();
-
-                break;
-
-            case "previous":
-
-                player.previous();
-
-                break;
-
-            case "setVolume": {
-
-                /*
-                 * Volumen en rango 0.0 - 1.0.
-                 */
-                float volume =
-                        (float) message.payload.optDouble(
-                                "volume",
-                                1.0
-                        );
-
-                volume =
-                        Math.max(
-                                0.0f,
-                                Math.min(
-                                        1.0f,
-                                        volume
-                                )
-                        );
-
-                player.setVolume(
-                        volume
-                );
-
-                break;
-            }
-
-            case "sync": {
-
-                long targetPositionMs =
-                        message.payload.optLong(
-                                "targetPositionMs",
-                                -1
-                        );
-
-                long serverTimestampMs =
-                        message.payload.optLong(
-                                "serverTimestampMs",
-                                message.timestamp
-                        );
-
-                if (
-                        targetPositionMs >= 0
-                ) {
-
-                    long elapsedMs =
+                    long positionMs =
                             Math.max(
                                     0,
-                                    System.currentTimeMillis()
-                                            - serverTimestampMs
+                                    message.payload.optLong(
+                                            "positionMs",
+                                            0
+                                    )
                             );
 
-                    long estimatedPositionMs =
-                            targetPositionMs
-                                    + elapsedMs;
+                    player.seekTo(
+                            positionMs
+                    );
 
-                    long currentPositionMs =
-                            player.getPositionMs();
+                    break;
+                }
 
-                    long differenceMs =
-                            Math.abs(
-                                    currentPositionMs
-                                            - estimatedPositionMs
+                case "open": {
+
+                    String videoId =
+                            message.payload.optString(
+                                    "videoId",
+                                    ""
+                            ).trim();
+
+                    if (!videoId.isEmpty()) {
+
+                        player.openVideo(
+                                videoId
+                        );
+                    }
+
+                    break;
+                }
+
+                case "next":
+
+                    player.next();
+
+                    break;
+
+                case "previous":
+
+                    player.previous();
+
+                    break;
+
+                case "setVolume": {
+
+                    float volume =
+                            (float) message.payload.optDouble(
+                                    "volume",
+                                    1.0
+                            );
+
+                    volume =
+                            Math.max(
+                                    0.0f,
+                                    Math.min(
+                                            1.0f,
+                                            volume
+                                    )
+                            );
+
+                    player.setVolume(
+                            volume
+                    );
+
+                    break;
+                }
+
+                case "sync": {
+
+                    long targetPositionMs =
+                            message.payload.optLong(
+                                    "targetPositionMs",
+                                    -1
+                            );
+
+                    long serverTimestampMs =
+                            message.payload.optLong(
+                                    "serverTimestampMs",
+                                    message.timestamp
                             );
 
                     if (
-                            differenceMs
-                                    > SEEK_CORRECTION_THRESHOLD_MS
+                            targetPositionMs >= 0
                     ) {
 
-                        player.seekTo(
-                                estimatedPositionMs
-                        );
+                        long elapsedMs =
+                                Math.max(
+                                        0,
+                                        System.currentTimeMillis()
+                                                - serverTimestampMs
+                                );
+
+                        long estimatedPositionMs =
+                                targetPositionMs
+                                        + elapsedMs;
+
+                        long currentPositionMs =
+                                player.getPositionMs();
+
+                        long differenceMs =
+                                Math.abs(
+                                        currentPositionMs
+                                                - estimatedPositionMs
+                                );
+
+                        if (
+                                differenceMs
+                                        > SEEK_CORRECTION_THRESHOLD_MS
+                        ) {
+
+                            player.seekTo(
+                                    estimatedPositionMs
+                            );
+                        }
                     }
+
+                    break;
                 }
 
-                break;
+                case "getStatus":
+                case "status":
+
+                    break;
+
+                default:
+
+                    break;
             }
 
-            case "getStatus":
-            case "status":
-
-                /*
-                 * El estado se obtiene directamente desde
-                 * SyncWebSocketServer.
-                 */
-                break;
-
-            default:
-
-                /*
-                 * Comando desconocido.
-                 * Se ignora sin provocar un crash.
-                 */
-                break;
+        } catch (Exception ignored) {
+            /*
+             * Un comando malformado nunca debe
+             * tumbar el servicio de sincronización.
+             */
         }
-
-    } catch (Exception ignored) {
-
-        /*
-         * Un comando malformado nunca debe tumbar
-         * el servicio de sincronización.
-         */
     }
-}
-
-        }
+    }
