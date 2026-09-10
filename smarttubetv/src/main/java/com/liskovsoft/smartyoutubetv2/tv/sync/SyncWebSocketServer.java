@@ -12,6 +12,7 @@ import org.java_websocket.server.WebSocketServer;
 import org.json.JSONObject;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class SyncWebSocketServer extends WebSocketServer {
 
@@ -21,9 +22,18 @@ public class SyncWebSocketServer extends WebSocketServer {
     private static final String SENDER_ID =
             "ygsync-receiver";
 
+    /*
+     * Comprobación frecuente para detectar rápidamente
+     * cuándo SmartTube ya cambió al nuevo video.
+     */
     private static final long READY_CHECK_INTERVAL_MS = 100L;
 
-    private static final long READY_TIMEOUT_MS = 30000L;
+    /*
+     * No mantenemos una espera de 30 segundos por cada solicitud.
+     * El ACK se envía inmediatamente y READY se utiliza solamente
+     * como confirmación posterior.
+     */
+    private static final long READY_TIMEOUT_MS = 10000L;
 
     private final SyncPlayerBridge mPlayerBridge;
 
@@ -31,6 +41,16 @@ public class SyncWebSocketServer extends WebSocketServer {
 
     private final Handler mMainHandler =
             new Handler(Looper.getMainLooper());
+
+    /*
+     * Guarda la comprobación READY activa por conexión.
+     *
+     * Esto evita que una solicitud anterior siga comprobándose
+     * cuando el mismo controlador ya pidió otro video.
+     */
+    private final ConcurrentHashMap<WebSocket, Runnable>
+            mReadyChecks =
+            new ConcurrentHashMap<>();
 
     public SyncWebSocketServer(
             int port,
@@ -76,12 +96,14 @@ public class SyncWebSocketServer extends WebSocketServer {
         );
 
         if (handshake != null) {
+
             Log.d(
                     TAG,
                     "YG Sync: handshake recibido"
             );
 
             try {
+
                 Log.d(
                         TAG,
                         "YG Sync: handshake resource="
@@ -89,12 +111,15 @@ public class SyncWebSocketServer extends WebSocketServer {
                 );
 
             } catch (Exception e) {
+
                 Log.d(
                         TAG,
                         "YG Sync: no se pudo obtener resource del handshake"
                 );
             }
+
         } else {
+
             Log.d(
                     TAG,
                     "YG Sync: handshake=null"
@@ -123,6 +148,8 @@ public class SyncWebSocketServer extends WebSocketServer {
                 reason == null
                         ? ""
                         : reason;
+
+        cancelReadyCheck(conn);
 
         Log.d(
                 TAG,
@@ -211,6 +238,9 @@ public class SyncWebSocketServer extends WebSocketServer {
                         + parsed.commandId
         );
 
+        /*
+         * PING
+         */
         if ("ping".equals(parsed.type)) {
 
             Log.d(
@@ -226,6 +256,9 @@ public class SyncWebSocketServer extends WebSocketServer {
             return;
         }
 
+        /*
+         * STATUS
+         */
         if (
                 "getStatus".equals(parsed.type)
                         ||
@@ -247,12 +280,24 @@ public class SyncWebSocketServer extends WebSocketServer {
 
         try {
 
+            /*
+             * Si llega un nuevo OPEN mientras todavía estamos
+             * esperando READY del anterior, cancelamos la
+             * comprobación anterior.
+             */
+            if ("open".equals(parsed.type)) {
+                cancelReadyCheck(conn);
+            }
+
             Log.d(
                     TAG,
                     "YG Sync: ejecutando comando="
                             + parsed.type
             );
 
+            /*
+             * Ejecutamos el comando inmediatamente.
+             */
             SyncCommand.execute(
                     parsed,
                     mPlayerBridge
@@ -264,11 +309,24 @@ public class SyncWebSocketServer extends WebSocketServer {
                             + parsed.type
             );
 
+            /*
+             * ACK SIEMPRE INMEDIATO.
+             *
+             * El controlador sabe así que el receptor aceptó
+             * el comando sin tener que esperar a que SmartTube
+             * termine de cambiar el reproductor.
+             */
             sendAck(
                     conn,
                     parsed
             );
 
+            /*
+             * OPEN:
+             *
+             * Después del ACK empezamos una comprobación
+             * independiente para READY.
+             */
             if ("open".equals(parsed.type)) {
 
                 String videoId =
@@ -313,8 +371,16 @@ public class SyncWebSocketServer extends WebSocketServer {
             String requestedVideoId
     ) {
 
+        /*
+         * Cancelamos cualquier comprobación anterior.
+         */
+        cancelReadyCheck(conn);
+
         final long startTime =
                 System.currentTimeMillis();
+
+        final String expectedVideoId =
+                requestedVideoId.trim();
 
         Runnable checker =
                 new Runnable() {
@@ -326,6 +392,9 @@ public class SyncWebSocketServer extends WebSocketServer {
                                 conn == null ||
                                 !conn.isOpen()
                         ) {
+
+                            mReadyChecks.remove(conn);
+
                             return;
                         }
 
@@ -334,24 +403,29 @@ public class SyncWebSocketServer extends WebSocketServer {
                             String currentVideoId =
                                     mPlayerBridge.getVideoId();
 
+                            /*
+                             * SmartTube ya cambió al video solicitado.
+                             */
                             if (
                                     currentVideoId != null
                                             &&
-                                    requestedVideoId.equals(
-                                            currentVideoId
+                                    expectedVideoId.equals(
+                                            currentVideoId.trim()
                                     )
                             ) {
 
                                 Log.d(
                                         TAG,
                                         "YG Sync: VIDEO READY "
-                                                + requestedVideoId
+                                                + expectedVideoId
                                 );
+
+                                mReadyChecks.remove(conn);
 
                                 sendReady(
                                         conn,
                                         request,
-                                        requestedVideoId
+                                        expectedVideoId
                                 );
 
                                 return;
@@ -361,27 +435,40 @@ public class SyncWebSocketServer extends WebSocketServer {
                                     System.currentTimeMillis()
                                             - startTime;
 
+                            /*
+                             * Timeout de READY.
+                             *
+                             * IMPORTANTE:
+                             * el ACK ya fue enviado anteriormente.
+                             * Por lo tanto este timeout NO significa
+                             * que el comando OPEN haya fallado.
+                             */
                             if (
                                     elapsed
                                             >= READY_TIMEOUT_MS
                             ) {
 
-                                Log.e(
+                                Log.w(
                                         TAG,
-                                        "YG Sync: TIMEOUT esperando video "
-                                                + requestedVideoId
+                                        "YG Sync: READY TIMEOUT "
+                                                + expectedVideoId
                                 );
+
+                                mReadyChecks.remove(conn);
 
                                 sendError(
                                         conn,
                                         request.commandId,
                                         "VIDEO_READY_TIMEOUT",
-                                        "El video no estuvo listo dentro del tiempo esperado"
+                                        "El comando fue aceptado, pero SmartTube no confirmó el video dentro del tiempo esperado"
                                 );
 
                                 return;
                             }
 
+                            /*
+                             * Volvemos a comprobar rápidamente.
+                             */
                             mMainHandler.postDelayed(
                                     this,
                                     READY_CHECK_INTERVAL_MS
@@ -395,6 +482,8 @@ public class SyncWebSocketServer extends WebSocketServer {
                                     e
                             );
 
+                            mReadyChecks.remove(conn);
+
                             sendError(
                                     conn,
                                     request.commandId,
@@ -405,7 +494,39 @@ public class SyncWebSocketServer extends WebSocketServer {
                     }
                 };
 
+        mReadyChecks.put(
+                conn,
+                checker
+        );
+
+        /*
+         * Primera comprobación inmediatamente.
+         */
         mMainHandler.post(checker);
+    }
+
+    private void cancelReadyCheck(
+            WebSocket conn
+    ) {
+
+        if (conn == null) {
+            return;
+        }
+
+        Runnable checker =
+                mReadyChecks.remove(conn);
+
+        if (checker != null) {
+
+            mMainHandler.removeCallbacks(
+                    checker
+            );
+
+            Log.d(
+                    TAG,
+                    "YG Sync: READY anterior cancelado"
+            );
+        }
     }
 
     @Override
@@ -620,6 +741,35 @@ public class SyncWebSocketServer extends WebSocketServer {
                     request.type
             );
 
+            /*
+             * Para OPEN incluimos también el video solicitado.
+             * Esto facilita que el Controller pueda confirmar
+             * rápidamente qué video fue aceptado.
+             */
+            if ("open".equals(request.type)) {
+
+                String videoId =
+                        request.payload
+                                .optString(
+                                        "videoId",
+                                        ""
+                                )
+                                .trim();
+
+                if (!videoId.isEmpty()) {
+
+                    payload.put(
+                            "videoId",
+                            videoId
+                    );
+
+                    payload.put(
+                            "accepted",
+                            true
+                    );
+                }
+            }
+
             JSONObject ack =
                     new JSONObject();
 
@@ -643,8 +793,17 @@ public class SyncWebSocketServer extends WebSocketServer {
                     payload
             );
 
+            String json =
+                    ack.toString();
+
+            Log.d(
+                    TAG,
+                    "YG Sync: enviando ACK="
+                            + json
+            );
+
             conn.send(
-                    ack.toString()
+                    json
             );
 
         } catch (Exception e) {
