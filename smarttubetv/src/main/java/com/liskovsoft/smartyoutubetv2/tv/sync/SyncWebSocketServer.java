@@ -21,6 +21,10 @@ public class SyncWebSocketServer extends WebSocketServer {
     private static final String SENDER_ID =
             "ygsync-receiver";
 
+    private static final long READY_CHECK_INTERVAL_MS = 100L;
+
+    private static final long READY_TIMEOUT_MS = 30000L;
+
     private final SyncPlayerBridge mPlayerBridge;
 
     private final Context mContext;
@@ -72,14 +76,12 @@ public class SyncWebSocketServer extends WebSocketServer {
         );
 
         if (handshake != null) {
-
             Log.d(
                     TAG,
                     "YG Sync: handshake recibido"
             );
 
             try {
-
                 Log.d(
                         TAG,
                         "YG Sync: handshake resource="
@@ -87,14 +89,12 @@ public class SyncWebSocketServer extends WebSocketServer {
                 );
 
             } catch (Exception e) {
-
                 Log.d(
                         TAG,
                         "YG Sync: no se pudo obtener resource del handshake"
                 );
             }
         } else {
-
             Log.d(
                     TAG,
                     "YG Sync: handshake=null"
@@ -269,6 +269,26 @@ public class SyncWebSocketServer extends WebSocketServer {
                     parsed
             );
 
+            if ("open".equals(parsed.type)) {
+
+                String videoId =
+                        parsed.payload
+                                .optString(
+                                        "videoId",
+                                        ""
+                                )
+                                .trim();
+
+                if (!videoId.isEmpty()) {
+
+                    waitForVideoReady(
+                            conn,
+                            parsed,
+                            videoId
+                    );
+                }
+            }
+
         } catch (Exception e) {
 
             Log.e(
@@ -285,6 +305,107 @@ public class SyncWebSocketServer extends WebSocketServer {
                     e.getMessage()
             );
         }
+    }
+
+    private void waitForVideoReady(
+            WebSocket conn,
+            SyncMessage request,
+            String requestedVideoId
+    ) {
+
+        final long startTime =
+                System.currentTimeMillis();
+
+        Runnable checker =
+                new Runnable() {
+
+                    @Override
+                    public void run() {
+
+                        if (
+                                conn == null ||
+                                !conn.isOpen()
+                        ) {
+                            return;
+                        }
+
+                        try {
+
+                            String currentVideoId =
+                                    mPlayerBridge.getVideoId();
+
+                            if (
+                                    currentVideoId != null
+                                            &&
+                                    requestedVideoId.equals(
+                                            currentVideoId
+                                    )
+                            ) {
+
+                                Log.d(
+                                        TAG,
+                                        "YG Sync: VIDEO READY "
+                                                + requestedVideoId
+                                );
+
+                                sendReady(
+                                        conn,
+                                        request,
+                                        requestedVideoId
+                                );
+
+                                return;
+                            }
+
+                            long elapsed =
+                                    System.currentTimeMillis()
+                                            - startTime;
+
+                            if (
+                                    elapsed
+                                            >= READY_TIMEOUT_MS
+                            ) {
+
+                                Log.e(
+                                        TAG,
+                                        "YG Sync: TIMEOUT esperando video "
+                                                + requestedVideoId
+                                );
+
+                                sendError(
+                                        conn,
+                                        request.commandId,
+                                        "VIDEO_READY_TIMEOUT",
+                                        "El video no estuvo listo dentro del tiempo esperado"
+                                );
+
+                                return;
+                            }
+
+                            mMainHandler.postDelayed(
+                                    this,
+                                    READY_CHECK_INTERVAL_MS
+                            );
+
+                        } catch (Exception e) {
+
+                            Log.e(
+                                    TAG,
+                                    "YG Sync: error comprobando VIDEO READY",
+                                    e
+                            );
+
+                            sendError(
+                                    conn,
+                                    request.commandId,
+                                    "VIDEO_READY_FAILED",
+                                    e.getMessage()
+                            );
+                        }
+                    }
+                };
+
+        mMainHandler.post(checker);
     }
 
     @Override
@@ -412,11 +533,6 @@ public class SyncWebSocketServer extends WebSocketServer {
                     json
             );
 
-            Log.d(
-                    TAG,
-                    "YG Sync: HELLO enviado"
-            );
-
         } catch (Exception e) {
 
             Log.e(
@@ -470,17 +586,8 @@ public class SyncWebSocketServer extends WebSocketServer {
                     payload
             );
 
-            String json =
-                    pong.toString();
-
-            Log.d(
-                    TAG,
-                    "YG Sync: enviando PONG="
-                            + json
-            );
-
             conn.send(
-                    json
+                    pong.toString()
             );
 
         } catch (Exception e) {
@@ -536,12 +643,85 @@ public class SyncWebSocketServer extends WebSocketServer {
                     payload
             );
 
+            conn.send(
+                    ack.toString()
+            );
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync: ERROR enviando ACK",
+                    e
+            );
+        }
+    }
+
+    private void sendReady(
+            WebSocket conn,
+            SyncMessage request,
+            String videoId
+    ) {
+
+        try {
+
+            JSONObject payload =
+                    new JSONObject();
+
+            payload.put(
+                    "success",
+                    true
+            );
+
+            payload.put(
+                    "videoId",
+                    videoId
+            );
+
+            payload.put(
+                    "positionMs",
+                    mPlayerBridge.getPositionMs()
+            );
+
+            payload.put(
+                    "isPlaying",
+                    mPlayerBridge.isPlaying()
+            );
+
+            payload.put(
+                    "readyTimestampMs",
+                    System.currentTimeMillis()
+            );
+
+            JSONObject ready =
+                    new JSONObject();
+
+            ready.put(
+                    "type",
+                    "ready"
+            );
+
+            ready.put(
+                    "commandId",
+                    request.commandId
+            );
+
+            ready.put(
+                    "senderId",
+                    SENDER_ID
+            );
+
+            ready.put(
+                    "payload",
+                    payload
+            );
+
             String json =
-                    ack.toString();
+                    ready.toString();
 
             Log.d(
                     TAG,
-                    "YG Sync: enviando ACK="
+                    "YG Sync: enviando READY="
                             + json
             );
 
@@ -553,7 +733,7 @@ public class SyncWebSocketServer extends WebSocketServer {
 
             Log.e(
                     TAG,
-                    "YG Sync: ERROR enviando ACK",
+                    "YG Sync: ERROR enviando READY",
                     e
             );
         }
@@ -665,17 +845,8 @@ public class SyncWebSocketServer extends WebSocketServer {
                     payload
             );
 
-            String json =
-                    status.toString();
-
-            Log.d(
-                    TAG,
-                    "YG Sync: enviando STATUS="
-                            + json
-            );
-
             conn.send(
-                    json
+                    status.toString()
             );
 
         } catch (Exception e) {
@@ -749,17 +920,8 @@ public class SyncWebSocketServer extends WebSocketServer {
                     payload
             );
 
-            String json =
-                    error.toString();
-
-            Log.e(
-                    TAG,
-                    "YG Sync: enviando ERROR="
-                            + json
-            );
-
             conn.send(
-                    json
+                    error.toString()
             );
 
         } catch (Exception e) {
