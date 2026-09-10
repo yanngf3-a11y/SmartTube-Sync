@@ -18,12 +18,6 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
     private final Handler mMainHandler =
             new Handler(Looper.getMainLooper());
 
-    /*
-     * Último vídeo solicitado por YG Sync.
-     *
-     * Se registra ANTES de enviar openVideo() al
-     * PlaybackPresenter porque openVideo() es asíncrono.
-     */
     private volatile String mRequestedVideoId;
 
     public SyncPlaybackBridge(Context context) {
@@ -142,9 +136,10 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                 videoId == null ||
                 videoId.trim().isEmpty()
         ) {
-            Log.w(
+
+            Log.e(
                     TAG,
-                    "openVideo() recibió videoId vacío"
+                    "OPEN rechazado: videoId vacío"
             );
 
             return;
@@ -153,24 +148,29 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
         final String cleanVideoId =
                 videoId.trim();
 
-        /*
-         * MUY IMPORTANTE:
-         *
-         * Registramos inmediatamente el vídeo solicitado.
-         *
-         * El WebSocket puede preguntar getVideoId()
-         * antes de que PlaybackPresenter termine de
-         * actualizar getVideo().
-         */
         mRequestedVideoId =
                 cleanVideoId;
 
         Log.d(
                 TAG,
-                "OPEN solicitado: "
+                "================================"
+        );
+
+        Log.d(
+                TAG,
+                "YG SYNC OPEN RECIBIDO"
+        );
+
+        Log.d(
+                TAG,
+                "videoId="
                         + cleanVideoId
         );
 
+        /*
+         * Toda interacción con PlaybackPresenter
+         * se ejecuta en el hilo principal.
+         */
         mMainHandler.post(() -> {
 
             try {
@@ -180,21 +180,114 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
 
                 Log.d(
                         TAG,
-                        "Ejecutando PlaybackPresenter.openVideo(): "
+                        "PlaybackPresenter="
+                                + p
+                );
+
+                /*
+                 * Estado anterior.
+                 */
+                try {
+
+                    if (p.getVideo() != null) {
+
+                        Log.d(
+                                TAG,
+                                "video ANTES="
+                                        + p.getVideo().videoId
+                        );
+
+                    } else {
+
+                        Log.d(
+                                TAG,
+                                "video ANTES=null"
+                        );
+                    }
+
+                } catch (Exception e) {
+
+                    Log.e(
+                            TAG,
+                            "No se pudo obtener video ANTES",
+                            e
+                    );
+                }
+
+                /*
+                 * ESTA ES LA LLAMADA REAL QUE DEBE
+                 * CAMBIAR EL VIDEO EN SMARTTUBE.
+                 */
+                Log.d(
+                        TAG,
+                        "LLAMANDO PlaybackPresenter.openVideo("
                                 + cleanVideoId
+                                + ")"
                 );
 
                 p.openVideo(
                         cleanVideoId
                 );
 
+                Log.d(
+                        TAG,
+                        "PlaybackPresenter.openVideo() terminó"
+                );
+
+                /*
+                 * Estado inmediatamente después.
+                 */
+                try {
+
+                    if (p.getVideo() != null) {
+
+                        Log.d(
+                                TAG,
+                                "video DESPUES="
+                                        + p.getVideo().videoId
+                        );
+
+                    } else {
+
+                        Log.d(
+                                TAG,
+                                "video DESPUES=null"
+                        );
+                    }
+
+                } catch (Exception e) {
+
+                    Log.e(
+                            TAG,
+                            "No se pudo obtener video DESPUES",
+                            e
+                    );
+                }
+
+                Log.d(
+                        TAG,
+                        "================================"
+                );
+
             } catch (Exception e) {
 
                 Log.e(
                         TAG,
-                        "Error ejecutando openVideo(): "
+                        "================================",
+                        e
+                );
+
+                Log.e(
+                        TAG,
+                        "YG SYNC ERROR EN openVideo()"
+                                + " videoId="
                                 + cleanVideoId,
                         e
+                );
+
+                Log.e(
+                        TAG,
+                        "================================"
                 );
             }
         });
@@ -321,10 +414,6 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
     @Override
     public String getVideoId() {
 
-        /*
-         * Primero intentamos obtener el ID real
-         * que SmartTube ya tiene cargado.
-         */
         try {
 
             PlaybackPresenter p =
@@ -340,30 +429,7 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                         !actualVideoId.trim().isEmpty()
                 ) {
 
-                    actualVideoId =
-                            actualVideoId.trim();
-
-                    /*
-                     * El PlaybackPresenter ya confirmó
-                     * realmente el vídeo.
-                     */
-                    if (
-                            mRequestedVideoId != null &&
-                            mRequestedVideoId.equals(
-                                    actualVideoId
-                            )
-                    ) {
-
-                        Log.d(
-                                TAG,
-                                "VIDEO CONFIRMADO: "
-                                        + actualVideoId
-                        );
-
-                        return actualVideoId;
-                    }
-
-                    return actualVideoId;
+                    return actualVideoId.trim();
                 }
             }
 
@@ -371,35 +437,24 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
 
             Log.e(
                     TAG,
-                    "Error obteniendo video real",
+                    "Error obteniendo videoId real",
                     e
             );
         }
 
         /*
-         * Si PlaybackPresenter todavía no actualizó
-         * getVideo(), devolvemos el último vídeo solicitado.
+         * Solamente informamos el ID solicitado si
+         * SmartTube todavía no expuso uno real.
          *
-         * Esto permite que el sistema READY no dependa
-         * exclusivamente de la actualización interna
-         * del Presenter.
+         * Esto mantiene el diagnóstico compatible
+         * con el servidor actual.
          */
-        String requested =
-                mRequestedVideoId;
-
         if (
-                requested != null &&
-                !requested.trim().isEmpty()
+                mRequestedVideoId != null &&
+                !mRequestedVideoId.trim().isEmpty()
         ) {
 
-            Log.d(
-                    TAG,
-                    "VIDEO solicitado todavía no reflejado "
-                            + "en Presenter; usando solicitado: "
-                            + requested
-            );
-
-            return requested;
+            return mRequestedVideoId;
         }
 
         return null;
@@ -432,4 +487,4 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
             return 0.0f;
         }
     }
-}
+                            }
