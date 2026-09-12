@@ -1,6 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string-array name="update_urls">
-        <item>https://github.com/yuliskov/SmartTubeNext/releases/download/latest/smarttube_stable2.json</item>
-    </string-array>
+<string-array name="update_urls">
+<!-- 
+            DESACTIVADO A PROPÓSITO.
+
+            Antes apuntaba a
+            https://github.com/yuliskov/SmartTubeNext/releases/download/latest/smarttube_stable2.json
+            que es el SmartTube ORIGINAL, sin el módulo de
+            sincronización YG Sync. Si esto queda activo, la
+            app ofrece "actualizar" instalando el SmartTube de
+            fábrica encima del nuestro, borrando toda la
+            integración de sincronización.
+
+            Las actualizaciones de este proyecto deben hacerse
+            a mano: mergear los cambios de yuliskov/SmartTube
+            al fork, y volver a compilar con el workflow propio
+            de GitHub Actions. Nunca dejar esta lista con una
+            URL que apunte al repositorio original.
+         -->
+</string-array>
 </resources>
