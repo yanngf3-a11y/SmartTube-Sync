@@ -19,9 +19,6 @@ public class SyncWebSocketServer extends WebSocketServer {
     private static final String TAG =
             SyncWebSocketServer.class.getSimpleName();
 
-    private static final String SENDER_ID =
-            "ygsync-receiver";
-
     /*
      * Comprobación frecuente para detectar rápidamente
      * cuándo SmartTube ya cambió al nuevo video.
@@ -38,6 +35,8 @@ public class SyncWebSocketServer extends WebSocketServer {
     private final SyncPlayerBridge mPlayerBridge;
 
     private final Context mContext;
+
+    private final String mSenderId;
 
     private final Handler mMainHandler =
             new Handler(Looper.getMainLooper());
@@ -64,6 +63,11 @@ public class SyncWebSocketServer extends WebSocketServer {
 
         mContext =
                 context.getApplicationContext();
+
+        mSenderId =
+                SyncDeviceIdentity.getDeviceId(
+                        mContext
+                );
 
         setReuseAddr(true);
 
@@ -633,7 +637,7 @@ public class SyncWebSocketServer extends WebSocketServer {
 
             hello.put(
                     "senderId",
-                    SENDER_ID
+                    mSenderId
             );
 
             hello.put(
@@ -699,7 +703,7 @@ public class SyncWebSocketServer extends WebSocketServer {
 
             pong.put(
                     "senderId",
-                    SENDER_ID
+                    mSenderId
             );
 
             pong.put(
@@ -785,7 +789,7 @@ public class SyncWebSocketServer extends WebSocketServer {
 
             ack.put(
                     "senderId",
-                    SENDER_ID
+                    mSenderId
             );
 
             ack.put(
@@ -867,7 +871,7 @@ public class SyncWebSocketServer extends WebSocketServer {
 
             ready.put(
                     "senderId",
-                    SENDER_ID
+                    mSenderId
             );
 
             ready.put(
@@ -996,7 +1000,7 @@ public class SyncWebSocketServer extends WebSocketServer {
 
             status.put(
                     "senderId",
-                    SENDER_ID
+                    mSenderId
             );
 
             status.put(
@@ -1071,7 +1075,7 @@ public class SyncWebSocketServer extends WebSocketServer {
 
             error.put(
                     "senderId",
-                    SENDER_ID
+                    mSenderId
             );
 
             error.put(
