@@ -243,6 +243,48 @@ public class SyncWebSocketServer extends WebSocketServer {
         );
 
         /*
+         * PAIR
+         *
+         * El Controller manda su deviceId (senderId) junto con el
+         * código de 6 dígitos que se muestra en la notificación de
+         * la TV. Si coincide, ese deviceId queda emparejado de forma
+         * permanente con este receptor.
+         */
+        if ("pair".equals(parsed.type)) {
+
+            String code =
+                    parsed.payload
+                            .optString(
+                                    "code",
+                                    ""
+                            )
+                            .trim();
+
+            boolean success =
+                    SyncPairingManager.tryPair(
+                            mContext,
+                            code,
+                            parsed.senderId
+                    );
+
+            Log.d(
+                    TAG,
+                    "YG Sync: intento de pairing, senderId="
+                            + parsed.senderId
+                            + " success="
+                            + success
+            );
+
+            sendPairResult(
+                    conn,
+                    parsed,
+                    success
+            );
+
+            return;
+        }
+
+        /*
          * PING
          */
         if ("ping".equals(parsed.type)) {
@@ -720,6 +762,88 @@ public class SyncWebSocketServer extends WebSocketServer {
             Log.e(
                     TAG,
                     "YG Sync: ERROR enviando PONG",
+                    e
+            );
+        }
+    }
+
+    private void sendPairResult(
+            WebSocket conn,
+            SyncMessage request,
+            boolean success
+    ) {
+
+        try {
+
+            JSONObject payload =
+                    new JSONObject();
+
+            payload.put(
+                    "success",
+                    success
+            );
+
+            if (success) {
+
+                payload.put(
+                        "deviceId",
+                        mSenderId
+                );
+
+                payload.put(
+                        "name",
+                        "YG Sync SmartTube"
+                );
+
+            } else {
+
+                payload.put(
+                        "reason",
+                        "INVALID_CODE"
+                );
+            }
+
+            JSONObject result =
+                    new JSONObject();
+
+            result.put(
+                    "type",
+                    "paired"
+            );
+
+            result.put(
+                    "commandId",
+                    request.commandId
+            );
+
+            result.put(
+                    "senderId",
+                    mSenderId
+            );
+
+            result.put(
+                    "payload",
+                    payload
+            );
+
+            String json =
+                    result.toString();
+
+            Log.d(
+                    TAG,
+                    "YG Sync: enviando PAIRED="
+                            + json
+            );
+
+            conn.send(
+                    json
+            );
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync: ERROR enviando PAIRED",
                     e
             );
         }
