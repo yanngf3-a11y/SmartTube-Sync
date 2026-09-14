@@ -101,6 +101,24 @@ public final class SyncCommand {
                     break;
                 }
 
+                case "playAt": {
+
+                    long playAtMs =
+                            message.payload.optLong(
+                                    "playAtMs",
+                                    -1
+                            );
+
+                    if (playAtMs > 0) {
+
+                        player.playAt(
+                                playAtMs
+                        );
+                    }
+
+                    break;
+                }
+
                 case "next":
 
                     player.next();

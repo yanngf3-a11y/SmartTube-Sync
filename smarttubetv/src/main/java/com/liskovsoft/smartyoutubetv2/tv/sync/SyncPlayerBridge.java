@@ -31,6 +31,15 @@ package com.liskovsoft.smartyoutubetv2.tv.sync;
    * todas juntas cuando llega la orden de reproducir.
    */
   void prepareVideo(String videoId);
+
+  /**
+   * Arranca la reproducción en un instante preciso (timestamp en
+   * el reloj de ESTE dispositivo, ya traducido por el Controller
+   * usando el offset de reloj). Se usa después de prepareVideo():
+   * el video ya está cargado y en pausa, y esto dispara el play()
+   * real exactamente a esa hora.
+   */
+  void playAt(long timestampMs);
   
   void next();
   

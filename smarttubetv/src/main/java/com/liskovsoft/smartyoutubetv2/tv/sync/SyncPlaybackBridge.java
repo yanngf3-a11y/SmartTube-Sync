@@ -369,6 +369,58 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
     }
 
     @Override
+    public void playAt(
+            long timestampMs
+    ) {
+
+        final long delayMs =
+                Math.max(
+                        0,
+                        timestampMs
+                                - System.currentTimeMillis()
+                );
+
+        Log.d(
+                TAG,
+                "YG SYNC PLAY_AT recibido, arranca en "
+                        + delayMs
+                        + "ms"
+        );
+
+        mMainHandler.postDelayed(
+                () -> {
+
+                    try {
+
+                        PlaybackView v =
+                                view();
+
+                        if (v != null) {
+
+                            v.setPlayWhenReady(
+                                    true
+                            );
+
+                            Log.d(
+                                    TAG,
+                                    "YG SYNC PLAY_AT: arrancó"
+                            );
+                        }
+
+                    } catch (Exception e) {
+
+                        Log.e(
+                                TAG,
+                                "Error en playAt()",
+                                e
+                        );
+                    }
+                },
+                delayMs
+        );
+    }
+
+    @Override
     public void next() {
 
         mMainHandler.post(() -> {
