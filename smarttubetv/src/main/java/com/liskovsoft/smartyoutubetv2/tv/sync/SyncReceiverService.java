@@ -45,6 +45,22 @@ public class SyncReceiverService extends Service {
         Log.d(TAG, "YG Sync: onCreate()");
         showDiagnostic("YG SYNC — INICIANDO SERVICIO");
 
+        String deviceId =
+                SyncDeviceIdentity.getDeviceId(
+                        getApplicationContext()
+                );
+
+        Log.d(
+                TAG,
+                "YG Sync: deviceId="
+                        + deviceId
+        );
+
+        showDiagnostic(
+                "YG SYNC — ID: "
+                        + deviceId
+        );
+
         if (!startForegroundService()) {
             Log.e(
                     TAG,
