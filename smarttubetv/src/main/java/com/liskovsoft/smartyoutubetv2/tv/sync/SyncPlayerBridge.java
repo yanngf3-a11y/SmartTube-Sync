@@ -23,6 +23,14 @@ package com.liskovsoft.smartyoutubetv2.tv.sync;
   void seekTo(long positionMs);
   
   void openVideo(String videoId);
+
+  /**
+   * Igual que openVideo, pero deja el video en pausa apenas carga
+   * (no arranca solo). Se usa junto con "playAt" (Fase 3.3): todas
+   * las TVs preparan el mismo video de antemano, y recién arrancan
+   * todas juntas cuando llega la orden de reproducir.
+   */
+  void prepareVideo(String videoId);
   
   void next();
   

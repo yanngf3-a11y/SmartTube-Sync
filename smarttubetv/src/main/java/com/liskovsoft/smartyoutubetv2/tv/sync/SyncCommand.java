@@ -83,6 +83,24 @@ public final class SyncCommand {
                     break;
                 }
 
+                case "prepare": {
+
+                    String videoId =
+                            message.payload.optString(
+                                    "videoId",
+                                    ""
+                            ).trim();
+
+                    if (!videoId.isEmpty()) {
+
+                        player.prepareVideo(
+                                videoId
+                        );
+                    }
+
+                    break;
+                }
+
                 case "next":
 
                     player.next();

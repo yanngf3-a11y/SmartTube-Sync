@@ -368,7 +368,10 @@ public class SyncWebSocketServer extends WebSocketServer {
              * esperando READY del anterior, cancelamos la
              * comprobación anterior.
              */
-            if ("open".equals(parsed.type)) {
+            if (
+                    "open".equals(parsed.type) ||
+                    "prepare".equals(parsed.type)
+            ) {
                 cancelReadyCheck(conn);
             }
 
@@ -410,7 +413,10 @@ public class SyncWebSocketServer extends WebSocketServer {
              * Después del ACK empezamos una comprobación
              * independiente para READY.
              */
-            if ("open".equals(parsed.type)) {
+            if (
+                    "open".equals(parsed.type) ||
+                    "prepare".equals(parsed.type)
+            ) {
 
                 String videoId =
                         parsed.payload

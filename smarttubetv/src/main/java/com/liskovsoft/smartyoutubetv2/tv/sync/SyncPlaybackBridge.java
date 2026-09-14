@@ -294,6 +294,81 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
     }
 
     @Override
+    public void prepareVideo(
+            String videoId
+    ) {
+
+        if (
+                videoId == null ||
+                videoId.trim().isEmpty()
+        ) {
+
+            Log.e(
+                    TAG,
+                    "PREPARE rechazado: videoId vacío"
+            );
+
+            return;
+        }
+
+        final String cleanVideoId =
+                videoId.trim();
+
+        mRequestedVideoId =
+                cleanVideoId;
+
+        Log.d(
+                TAG,
+                "YG SYNC PREPARE RECIBIDO videoId="
+                        + cleanVideoId
+        );
+
+        mMainHandler.post(() -> {
+
+            try {
+
+                PlaybackPresenter p =
+                        presenter();
+
+                p.openVideo(
+                        cleanVideoId
+                );
+
+                /*
+                 * A diferencia de openVideo(), acá no dejamos
+                 * que arranque solo: lo pausamos apenas carga.
+                 * El "play" real llega después, con "playAt"
+                 * (Fase 3.3), al mismo tiempo en todas las TVs.
+                 */
+                PlaybackView v =
+                        view();
+
+                if (v != null) {
+
+                    v.setPlayWhenReady(
+                            false
+                    );
+                }
+
+                Log.d(
+                        TAG,
+                        "YG SYNC PREPARE: video cargado en pausa "
+                                + cleanVideoId
+                );
+
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "YG SYNC ERROR EN prepareVideo() videoId="
+                                + cleanVideoId,
+                        e
+                );
+            }
+        });
+    }
+
+    @Override
     public void next() {
 
         mMainHandler.post(() -> {
