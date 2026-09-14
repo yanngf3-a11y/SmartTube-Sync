@@ -20,7 +20,6 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
-import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncDiscoveryServer;
 
 /**
  * Loads PlaybackFragment and delegates input from a game controller.
@@ -45,19 +44,13 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean mIsBackPressed;
 
     /**
-     * YG Sync UDP discovery server.
-     *
-     * NOTE: The TCP command server (YgSyncServer) was removed from this
-     * Activity. Commands now travel through SyncWebSocketServer, which
-     * runs on TCP 8765 from app startup (see MainApplication /
-     * SyncReceiverService). Running YgSyncServer here too caused a
-     * BindException ("Address already in use") because both servers
-     * tried to bind the same TCP port.
-     *
-     * Discovery (UDP 8766) is kept here for now while the WebSocket
-     * system is being validated. It may be moved to app startup later.
+     * NOTE: Neither the TCP command server nor the UDP discovery server
+     * run from this Activity anymore. Both are owned exclusively by
+     * SyncReceiverService, started once from MainApplication at app
+     * startup. Starting them here too caused duplicate servers
+     * competing for the same ports (BindException on TCP 8765, and a
+     * second UDP 8766 responder racing with the service's own).
      */
-    private YgSyncDiscoveryServer mYgSyncDiscoveryServer;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -78,59 +71,10 @@ public class PlaybackActivity extends LeanbackActivity {
                     (PlaybackFragment) fragment;
         }
 
-        startYgSyncDiscoveryServer();
-
         Log.d(
                 TAG,
                 "PlaybackActivity created. PlaybackFragment found: "
                         + (mPlaybackFragment != null)
-        );
-    }
-
-    /**
-     * Starts the YG Sync UDP discovery server.
-     *
-     * The Controller sends YG_SYNC_DISCOVER on UDP port 8766.
-     * This server responds with the SmartTube receiver name
-     * and TCP port used for commands.
-     */
-    private void startYgSyncDiscoveryServer() {
-
-        if (
-                mYgSyncDiscoveryServer != null &&
-                mYgSyncDiscoveryServer.isRunning()
-        ) {
-            return;
-        }
-
-        mYgSyncDiscoveryServer =
-                new YgSyncDiscoveryServer(this);
-
-        mYgSyncDiscoveryServer.start();
-
-        Log.d(
-                TAG,
-                "YG Sync discovery started on UDP port "
-                        + mYgSyncDiscoveryServer.getPort()
-        );
-    }
-
-    /**
-     * Stops the YG Sync UDP discovery server when the
-     * playback Activity is really destroyed.
-     */
-    private void stopYgSyncDiscoveryServer() {
-
-        if (mYgSyncDiscoveryServer != null) {
-
-            mYgSyncDiscoveryServer.stop();
-
-            mYgSyncDiscoveryServer = null;
-        }
-
-        Log.d(
-                TAG,
-                "YG Sync discovery server stopped"
         );
     }
 
@@ -389,8 +333,6 @@ public class PlaybackActivity extends LeanbackActivity {
 
     @Override
     public void finishReally() {
-
-        stopYgSyncDiscoveryServer();
 
         super.finishReally();
 
