@@ -10,8 +10,6 @@ import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
 
-import com.liskovsoft.smartyoutubetv2.ygsync.YgSyncDiscoveryServer;
-
 /**
  * Servicio foreground de YG Sync.
  *
@@ -38,7 +36,7 @@ public class SyncReceiverService extends Service {
 
     private SyncWebSocketServer mServer;
 
-    private YgSyncDiscoveryServer mDiscoveryServer;
+    private SyncDiscoveryServer mDiscoveryServer;
 
     @Override
     public void onCreate() {
@@ -70,7 +68,7 @@ public class SyncReceiverService extends Service {
         try {
 
             mDiscoveryServer =
-                    new YgSyncDiscoveryServer(
+                    new SyncDiscoveryServer(
                             getApplicationContext()
                     );
 
