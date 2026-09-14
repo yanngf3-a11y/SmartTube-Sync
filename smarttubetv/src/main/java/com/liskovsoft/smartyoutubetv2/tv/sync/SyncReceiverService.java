@@ -38,6 +38,8 @@ public class SyncReceiverService extends Service {
 
     private SyncDiscoveryServer mDiscoveryServer;
 
+    private String mPairingCode = "";
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -59,6 +61,22 @@ public class SyncReceiverService extends Service {
         showDiagnostic(
                 "YG SYNC — ID: "
                         + deviceId
+        );
+
+        mPairingCode =
+                SyncPairingManager.generateNewCode(
+                        getApplicationContext()
+                );
+
+        Log.d(
+                TAG,
+                "YG Sync: código de pairing="
+                        + mPairingCode
+        );
+
+        showDiagnostic(
+                "YG SYNC — CÓDIGO: "
+                        + mPairingCode
         );
 
         if (!startForegroundService()) {
@@ -381,6 +399,27 @@ public class SyncReceiverService extends Service {
         }
     }
 
+    /**
+     * Texto de la notificación permanente. Mientras el receptor no
+     * tenga ningún controlador emparejado, muestra el código de 6
+     * dígitos que hay que escribir en "YG Sync Control" para
+     * vincularlo. Una vez emparejado, este texto se puede simplificar
+     * más adelante (paso 2.3) para mostrar en su lugar el estado de
+     * reproducción.
+     */
+    private String getNotificationText() {
+
+        if (
+                mPairingCode == null ||
+                mPairingCode.trim().isEmpty()
+        ) {
+            return "Esperando conexión del controlador";
+        }
+
+        return "Código de emparejamiento: "
+                + mPairingCode;
+    }
+
     private Notification createNotification() {
 
         if (Build.VERSION.SDK_INT >=
@@ -394,7 +433,7 @@ public class SyncReceiverService extends Service {
                             "YG Sync Receiver"
                     )
                     .setContentText(
-                            "Esperando conexión del controlador"
+                            getNotificationText()
                     )
                     .setSmallIcon(
                             android.R.drawable.ic_media_play
@@ -417,7 +456,7 @@ public class SyncReceiverService extends Service {
                             "YG Sync Receiver"
                     )
                     .setContentText(
-                            "Esperando conexión del controlador"
+                            getNotificationText()
                     )
                     .setSmallIcon(
                             android.R.drawable.ic_media_play
@@ -437,7 +476,7 @@ public class SyncReceiverService extends Service {
                             "YG Sync Receiver"
                     )
                     .setContentText(
-                            "Esperando conexión del controlador"
+                            getNotificationText()
                     )
                     .setSmallIcon(
                             android.R.drawable.ic_media_play
