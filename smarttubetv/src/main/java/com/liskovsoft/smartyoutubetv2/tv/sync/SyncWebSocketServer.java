@@ -324,6 +324,43 @@ public class SyncWebSocketServer extends WebSocketServer {
             return;
         }
 
+        /*
+         * A partir de acá, todo lo que sigue son comandos de
+         * control real (play, pause, open, seek, etc.). Los
+         * rechazamos si ese senderId no está emparejado.
+         *
+         * "pair", "ping" y "status"/"getStatus" ya se resolvieron
+         * arriba y no pasan por acá, así que un Controller nuevo
+         * siempre puede emparejarse sin quedar bloqueado antes de
+         * tiempo.
+         */
+        if (
+                !SyncPairingManager.isPaired(
+                        mContext,
+                        parsed.senderId
+                )
+        ) {
+
+            Log.d(
+                    TAG,
+                    "YG Sync: comando RECHAZADO (no emparejado), senderId="
+                            + parsed.senderId
+                            + " type="
+                            + parsed.type
+            );
+
+            sendError(
+                    conn,
+                    parsed.commandId,
+                    "NOT_PAIRED",
+                    "Este dispositivo no está emparejado. "
+                            + "Usá el código de la notificación "
+                            + "para emparejarlo."
+            );
+
+            return;
+        }
+
         try {
 
             /*
