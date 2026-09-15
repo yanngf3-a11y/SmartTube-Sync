@@ -56,6 +56,12 @@ android {
         // values linked with applicationId: searchable.searchSuggestAuthority, searchable.searchSuggestIntentData, VideoContract.CONTENT_AUTHORITY
         applicationId "app.smarttube"
         minSdkVersion project.properties.minSdkVersion
+        // Requerido por androidx.security:security-crypto (Keystore
+        // para el pairing, Fase 2 del plan de mejoras). Sube el
+        // mínimo de este módulo a Android 6.0 (API 23); confirmado
+        // con el usuario que todas sus TVs son de esa versión o más
+        // nuevas.
+        minSdkVersion 23
         targetSdkVersion project.properties.targetSdkVersion
         versionCode 2436
         versionName "32.46"
