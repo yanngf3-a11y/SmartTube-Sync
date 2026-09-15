@@ -6,7 +6,9 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -39,6 +41,23 @@ public class SyncReceiverService extends Service {
     private SyncDiscoveryServer mDiscoveryServer;
 
     private String mPairingCode = "";
+
+    /*
+     * Fire TV (y otros dispositivos) no tienen un panel de
+     * notificaciones accesible para el usuario, así que la
+     * notificación permanente con el código no sirve ahí. Como
+     * respaldo, repetimos el código en pantalla varias veces al
+     * arrancar, con tiempo de sobra para leerlo y escribirlo en el
+     * Controller.
+     */
+    private static final int PAIRING_REMINDER_COUNT = 10;
+
+    private static final long PAIRING_REMINDER_INTERVAL_MS = 20_000L;
+
+    private final Handler mPairingReminderHandler =
+            new Handler(Looper.getMainLooper());
+
+    private int mPairingReminderShown = 0;
 
     @Override
     public void onCreate() {
@@ -74,10 +93,18 @@ public class SyncReceiverService extends Service {
                         + mPairingCode
         );
 
-        showDiagnostic(
-                "YG SYNC — CÓDIGO: "
-                        + mPairingCode
-        );
+        startPairingCodeReminder();
+
+        if (
+                !SyncPairingManager.hasAnyPairedController(
+                        getApplicationContext()
+                )
+        ) {
+
+            showPairingCodePopup(
+                    mPairingCode
+            );
+        }
 
         if (!startForegroundService()) {
             Log.e(
@@ -277,6 +304,10 @@ public class SyncReceiverService extends Service {
     @Override
     public void onDestroy() {
 
+        mPairingReminderHandler.removeCallbacksAndMessages(
+                null
+        );
+
         Log.d(
                 TAG,
                 "YG Sync: onDestroy()"
@@ -368,7 +399,7 @@ public class SyncReceiverService extends Service {
                     new NotificationChannel(
                             CHANNEL_ID,
                             CHANNEL_NAME,
-                            NotificationManager.IMPORTANCE_LOW
+                            NotificationManager.IMPORTANCE_DEFAULT
                     );
 
             channel.setDescription(
@@ -483,6 +514,88 @@ public class SyncReceiverService extends Service {
                     )
                     .setOngoing(true)
                     .build();
+        }
+    }
+
+    /**
+     * Muestra el código de pairing como Toast repetidas veces
+     * (cada 20s, hasta 10 veces = un poco más de 3 minutos), para
+     * dar tiempo real a leerlo y escribirlo en el Controller sin
+     * apuro. Necesario porque en dispositivos como Fire TV no hay
+     * panel de notificaciones accesible para el usuario.
+     */
+    private void startPairingCodeReminder() {
+
+        mPairingReminderShown = 0;
+
+        Runnable reminder =
+                new Runnable() {
+
+                    @Override
+                    public void run() {
+
+                        if (
+                                mPairingReminderShown
+                                        >= PAIRING_REMINDER_COUNT
+                        ) {
+                            return;
+                        }
+
+                        mPairingReminderShown++;
+
+                        showDiagnostic(
+                                "YG SYNC — CÓDIGO DE EMPAREJAMIENTO: "
+                                        + mPairingCode
+                        );
+
+                        mPairingReminderHandler.postDelayed(
+                                this,
+                                PAIRING_REMINDER_INTERVAL_MS
+                        );
+                    }
+                };
+
+        mPairingReminderHandler.post(reminder);
+    }
+
+    /**
+     * Lanza la ventana emergente con el código de pairing. Se llama
+     * solo la primera vez (ver hasAnyPairedController() en
+     * onCreate). Si por algún motivo el dispositivo no deja lanzar
+     * la Activity desde el servicio, no rompe nada — el código
+     * sigue disponible igual por el recordatorio en pantalla y por
+     * la notificación.
+     */
+    private void showPairingCodePopup(String code) {
+
+        try {
+
+            Intent intent =
+                    new Intent(
+                            getApplicationContext(),
+                            PairingCodeActivity.class
+                    );
+
+            intent.putExtra(
+                    PairingCodeActivity.EXTRA_CODE,
+                    code
+            );
+
+            intent.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK
+            );
+
+            startActivity(
+                    intent
+            );
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "YG Sync: no se pudo mostrar la ventana de pairing: "
+                            + e.getMessage()
+            );
         }
     }
 

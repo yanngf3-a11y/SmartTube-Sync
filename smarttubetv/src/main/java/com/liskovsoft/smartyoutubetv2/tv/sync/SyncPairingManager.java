@@ -285,6 +285,27 @@ public final class SyncPairingManager {
         );
     }
 
+    /**
+     * true si este receptor todavía no tiene NINGÚN controller
+     * emparejado (primera vez, o después de borrar datos/reinstalar).
+     * Se usa para decidir si vale la pena interrumpir con la
+     * ventana emergente del código, o si ya está todo configurado
+     * y no hace falta molestar.
+     */
+    public static boolean hasAnyPairedController(
+            Context context
+    ) {
+
+        Set<String> paired =
+                prefs(context)
+                        .getStringSet(
+                                KEY_PAIRED_IDS,
+                                Collections.emptySet()
+                        );
+
+        return !paired.isEmpty();
+    }
+
     private static synchronized SharedPreferences prefs(
             Context context
     ) {
