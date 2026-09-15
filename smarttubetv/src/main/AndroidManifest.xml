@@ -193,6 +193,15 @@
             android:screenOrientation="unspecified"
             android:theme="@style/App.Theme.Leanback.Preferences"/>
 
+        <activity
+            android:name="com.liskovsoft.smartyoutubetv2.tv.sync.PairingCodeActivity"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|layoutDirection"
+            android:screenOrientation="unspecified"
+            android:theme="@style/App.Theme.Leanback.Preferences"/>
+
         <!-- Android 8 fallback -->
 
         <activity
