@@ -34,6 +34,12 @@
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- YG Sync: requerido por WifiManager.createMulticastLock() en
+         SyncDiscoveryServer, para que el descubrimiento UDP (puerto 8766)
+         sea confiable incluso con el WiFi en modo ahorro de energía. -->
+    <uses-permission
+        android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+
     <uses-sdk
         tools:overrideLibrary="
             androidx.leanback.preference,
