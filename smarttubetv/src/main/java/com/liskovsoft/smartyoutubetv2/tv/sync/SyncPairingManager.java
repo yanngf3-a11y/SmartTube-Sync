@@ -5,7 +5,7 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import androidx.security.crypto.EncryptedSharedPreferences;
-import androidx.security.crypto.MasterKey;
+import androidx.security.crypto.MasterKeys;
 
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -297,20 +297,16 @@ public final class SyncPairingManager {
 
         try {
 
-            MasterKey masterKey =
-                    new MasterKey.Builder(
-                            appContext
-                    )
-                            .setKeyScheme(
-                                    MasterKey.KeyScheme.AES256_GCM
-                            )
-                            .build();
+            String masterKeyAlias =
+                    MasterKeys.getOrCreate(
+                            MasterKeys.AES256_GCM_SPEC
+                    );
 
             sPrefsCache =
                     EncryptedSharedPreferences.create(
-                            appContext,
                             PREFS_NAME,
-                            masterKey,
+                            masterKeyAlias,
+                            appContext,
                             EncryptedSharedPreferences
                                     .PrefKeyEncryptionScheme
                                     .AES256_SIV,
