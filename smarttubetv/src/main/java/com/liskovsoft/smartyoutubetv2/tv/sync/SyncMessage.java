@@ -20,6 +20,8 @@ import org.json.JSONObject;
 
 * "senderId": "ygsync-controller",
 
+* "authToken": "token secreto de pairing (o vacío)",
+
 * "timestamp": 123456789,
 
 * "payload": {}
@@ -31,6 +33,7 @@ import org.json.JSONObject;
   public final String type;
   public final String commandId;
   public final String senderId;
+  public final String authToken;
   public final long timestamp;
   public final JSONObject payload;
   
@@ -38,6 +41,7 @@ import org.json.JSONObject;
   String type,
   String commandId,
   String senderId,
+  String authToken,
   long timestamp,
   JSONObject payload
   ) {
@@ -56,6 +60,11 @@ import org.json.JSONObject;
          senderId == null
                  ? ""
                  : senderId.trim();
+
+ this.authToken =
+         authToken == null
+                 ? ""
+                 : authToken.trim();
 
  this.timestamp =
          timestamp > 0
@@ -119,6 +128,12 @@ import org.json.JSONObject;
                  ""
          ).trim();
 
+ String authToken =
+         object.optString(
+                 "authToken",
+                 ""
+         ).trim();
+
  long timestamp =
          object.optLong(
                  "timestamp",
@@ -139,6 +154,7 @@ import org.json.JSONObject;
          type,
          commandId,
          senderId,
+         authToken,
          timestamp,
          payload
  );
@@ -174,6 +190,11 @@ import org.json.JSONObject;
  object.put(
          "senderId",
          senderId
+ );
+
+ object.put(
+         "authToken",
+         authToken
  );
 
  object.put(
