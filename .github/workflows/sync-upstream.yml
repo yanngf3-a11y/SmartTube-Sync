@@ -1,0 +1,55 @@
+name: Sync con SmartTube original
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Agregar remoto upstream
+        run: |
+          git remote add upstream https://github.com/yuliskov/SmartTube.git
+          git fetch upstream
+
+      - name: Configurar autor de commits
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Intentar merge automático
+        id: merge
+        continue-on-error: true
+        run: git merge upstream/master --no-edit
+
+      - name: Push si el merge fue limpio
+        if: steps.merge.outcome == 'success'
+        run: git push origin master
+
+      - name: Si hay conflicto, crear rama y PR
+        if: steps.merge.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git merge --abort || true
+          BRANCH="sync/upstream-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          git merge upstream/master --no-edit || true
+          git add -A
+          git commit -m "Merge de SmartTube original - revisar conflictos" || true
+          git push origin "$BRANCH"
+          gh pr create --title "Actualización de SmartTube con conflictos" \
+            --body "El merge automático encontró conflictos. Revisar manualmente antes de aceptar." \
+            --base master --head "$BRANCH"
