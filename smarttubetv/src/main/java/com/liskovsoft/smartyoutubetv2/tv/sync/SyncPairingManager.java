@@ -2,6 +2,7 @@ package com.liskovsoft.smartyoutubetv2.tv.sync;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.security.crypto.EncryptedSharedPreferences;
@@ -9,7 +10,6 @@ import androidx.security.crypto.MasterKeys;
 
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -225,11 +225,12 @@ public final class SyncPairingManager {
         );
 
         String token =
-                Base64.getUrlEncoder()
-                        .withoutPadding()
-                        .encodeToString(
-                                randomBytes
-                        );
+                Base64.encodeToString(
+                        randomBytes,
+                        Base64.URL_SAFE
+                                | Base64.NO_WRAP
+                                | Base64.NO_PADDING
+                );
 
         prefs(context)
                 .edit()
