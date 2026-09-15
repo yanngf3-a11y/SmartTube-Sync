@@ -12,6 +12,8 @@ import org.java_websocket.server.WebSocketServer;
 import org.json.JSONObject;
 
 import java.net.InetSocketAddress;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SyncWebSocketServer extends WebSocketServer {
@@ -37,6 +39,16 @@ public class SyncWebSocketServer extends WebSocketServer {
     private final Context mContext;
 
     private final String mSenderId;
+
+    /*
+     * Últimos commandId procesados, para detectar duplicados. Se
+     * guarda un número acotado (los más viejos se van descartando)
+     * para no crecer sin límite durante una sesión larga.
+     */
+    private static final int MAX_RECENT_COMMAND_IDS = 200;
+
+    private final Set<String> mRecentCommandIds =
+            new LinkedHashSet<>();
 
     private final Handler mMainHandler =
             new Handler(Looper.getMainLooper());
@@ -241,6 +253,33 @@ public class SyncWebSocketServer extends WebSocketServer {
                 "YG Sync: commandId="
                         + parsed.commandId
         );
+
+        /*
+         * DEDUPLICACIÓN DE COMANDOS
+         *
+         * Si este mismo commandId ya se procesó antes (por ejemplo,
+         * porque la red duplicó el mensaje o el Controller lo mandó
+         * dos veces por error), lo ignoramos en vez de ejecutarlo de
+         * nuevo. "ping"/"getStatus" no cambian nada en el reproductor
+         * así que no hace falta protegerlos, pero no cuesta nada
+         * aplicarlo parejo a todos los tipos de mensaje.
+         */
+        if (
+                parsed.commandId != null &&
+                !parsed.commandId.trim().isEmpty()
+        ) {
+
+            if (isDuplicateCommand(parsed.commandId)) {
+
+                Log.d(
+                        TAG,
+                        "YG Sync: comando DUPLICADO ignorado, commandId="
+                                + parsed.commandId
+                );
+
+                return;
+            }
+        }
 
         /*
          * PAIR
@@ -1194,6 +1233,40 @@ public class SyncWebSocketServer extends WebSocketServer {
                     e.getMessage()
             );
         }
+    }
+
+    /**
+     * true si este commandId ya se procesó recientemente. Si es
+     * nuevo, lo agrega a la lista de vistos (recortando los más
+     * viejos si hace falta) y devuelve false.
+     */
+    private synchronized boolean isDuplicateCommand(
+            String commandId
+    ) {
+
+        if (mRecentCommandIds.contains(commandId)) {
+            return true;
+        }
+
+        mRecentCommandIds.add(commandId);
+
+        while (
+                mRecentCommandIds.size()
+                        > MAX_RECENT_COMMAND_IDS
+        ) {
+
+            java.util.Iterator<String> it =
+                    mRecentCommandIds.iterator();
+
+            if (it.hasNext()) {
+                it.next();
+                it.remove();
+            } else {
+                break;
+            }
+        }
+
+        return false;
     }
 
     private void sendError(
