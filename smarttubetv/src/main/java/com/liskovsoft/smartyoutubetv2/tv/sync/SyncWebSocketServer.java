@@ -306,6 +306,14 @@ public class SyncWebSocketServer extends WebSocketServer {
                             parsed.senderId
                     );
 
+            String authToken =
+                    success
+                            ? SyncPairingManager.getOrCreateToken(
+                                    mContext,
+                                    parsed.senderId
+                            )
+                            : null;
+
             Log.d(
                     TAG,
                     "YG Sync: intento de pairing, senderId="
@@ -317,7 +325,8 @@ public class SyncWebSocketServer extends WebSocketServer {
             sendPairResult(
                     conn,
                     parsed,
-                    success
+                    success,
+                    authToken
             );
 
             return;
@@ -852,7 +861,8 @@ public class SyncWebSocketServer extends WebSocketServer {
     private void sendPairResult(
             WebSocket conn,
             SyncMessage request,
-            boolean success
+            boolean success,
+            String authToken
     ) {
 
         try {
@@ -875,6 +885,11 @@ public class SyncWebSocketServer extends WebSocketServer {
                 payload.put(
                         "name",
                         "YG Sync SmartTube"
+                );
+
+                payload.put(
+                        "authToken",
+                        authToken
                 );
 
             } else {
