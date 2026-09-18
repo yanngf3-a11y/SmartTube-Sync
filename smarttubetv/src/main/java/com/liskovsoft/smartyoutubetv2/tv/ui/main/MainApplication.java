@@ -1,5 +1,6 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.main;
 
+import android.content.Intent;
 import android.os.Build.VERSION;
 
 import androidx.multidex.MultiDexApplication;
@@ -32,6 +33,7 @@ import com.liskovsoft.smartyoutubetv2.tv.ui.playback.PlaybackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.search.tags.SearchTagsActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.signin.SignInActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.webbrowser.WebBrowserActivity;
+import com.liskovsoft.smartyoutubetv2.tv.sync.SyncReceiverService;
 
 import org.conscrypt.Conscrypt;
 
@@ -83,6 +85,18 @@ public class MainApplication extends MultiDexApplication { // fix: Didn't find c
 
         setupGlobalExceptionHandler();
         setupViewManager();
+        startSyncService();
+    }
+
+    private void startSyncService() {
+        // SmartTube Sync: arranca el servicio que escucha comandos de sincronizacion
+        // desde el telefono controlador. Envuelto en try/catch para que un fallo aqui
+        // nunca tumbe el arranque normal de la app.
+        try {
+            startService(new Intent(this, SyncReceiverService.class));
+        } catch (Throwable e) {
+            // Si falla, la app sigue funcionando normal, solo sin sincronizacion.
+        }
     }
 
     private void setupViewManager() {
