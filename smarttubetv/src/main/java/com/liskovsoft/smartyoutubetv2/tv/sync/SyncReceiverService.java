@@ -298,7 +298,14 @@ public class SyncReceiverService extends Service {
                 "YG Sync: onStartCommand()"
         );
 
-        return START_STICKY;
+        // SmartTube Sync: no revivir el servicio solo tras un cierre forzado
+        // de la app (Runtime.getRuntime().exit(0) al salir con Atrás). Con
+        // START_STICKY, Android lo interpreta como una muerte "accidental"
+        // y lo resucita en un proceso nuevo, aunque el usuario haya cerrado
+        // la app de verdad. START_NOT_STICKY no afecta el uso normal (si
+        // solo vas a Home y volvés, la app y el servicio siguen vivos
+        // igual, porque el proceso nunca murió).
+        return START_NOT_STICKY;
     }
 
     /**
