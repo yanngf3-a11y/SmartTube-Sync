@@ -1,6 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.common;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.KeyEvent;
 
@@ -12,6 +13,7 @@ import com.liskovsoft.smartyoutubetv2.common.misc.MotherActivity;
 import com.liskovsoft.smartyoutubetv2.common.misc.PlayerKeyTranslator;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
+import com.liskovsoft.smartyoutubetv2.tv.sync.SyncReceiverService;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.keyhandler.DoubleBackManager2;
 import com.liskovsoft.smartyoutubetv2.tv.ui.playback.PlaybackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.search.tags.SearchTagsActivity;
@@ -134,6 +136,16 @@ public abstract class LeanbackActivity extends MotherActivity {
 
     private void finishTheApp() {
         getViewManager().addOnFinish(sOnFinish);
+
+        // El usuario está saliendo de verdad de la app (Back en la
+        // pantalla principal). properlyFinishTheApp() de acá abajo
+        // manda todo a segundo plano A PROPÓSITO sin matar el
+        // proceso (así lo documenta ViewManager — sirve para que
+        // SmartTube en sí siga con lo suyo en segundo plano), así
+        // que el servicio de YG Sync nunca se enteraba de que el
+        // usuario quería cerrar todo. Lo paramos acá puntualmente,
+        // sin tocar el resto del comportamiento de la app.
+        stopService(new Intent(this, SyncReceiverService.class));
 
         Utils.properlyFinishTheApp(this);
     }
