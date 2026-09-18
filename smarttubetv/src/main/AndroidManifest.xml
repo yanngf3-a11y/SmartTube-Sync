@@ -20,6 +20,14 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- YG Sync: permisos necesarios para mantener el receptor activo -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- YG Sync: requerido por WifiManager.createMulticastLock() en
+         SyncDiscoveryServer, para que el descubrimiento UDP (puerto 8766)
+         sea confiable incluso con el WiFi en modo ahorro de energía. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+
     <uses-sdk tools:overrideLibrary="
         androidx.leanback.preference,
         androidx.recommendation,
@@ -135,6 +143,14 @@
         <!-- screenOrientation="behind" is important too. This fix crashes on Android 8 (api 26) and above, except few devices. -->
         <!-- More info about behind: https://stackoverflow.com/a/52426009/1279056 -->
         <activity android:name="com.liskovsoft.smartyoutubetv2.tv.ui.dialogs.AppDialogActivity"
+                  android:noHistory="true"
+                  android:excludeFromRecents="true"
+                  android:launchMode="singleInstance"
+                  android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|layoutDirection"
+                  android:screenOrientation="unspecified"
+                  android:theme="@style/App.Theme.Leanback.Preferences"/>
+
+        <activity android:name="com.liskovsoft.smartyoutubetv2.tv.sync.PairingCodeActivity"
                   android:noHistory="true"
                   android:excludeFromRecents="true"
                   android:launchMode="singleInstance"
@@ -298,6 +314,17 @@
             android:screenOrientation="unspecified"/>
 
         <!-- END Launchers -->
+
+        <!--
+            YG Sync:
+            Servicio receptor de comandos de sincronización desde el teléfono.
+            TCP 8765 = WebSocket
+        -->
+        <service
+            android:name="com.liskovsoft.smartyoutubetv2.tv.sync.SyncReceiverService"
+            android:exported="false"
+            android:enabled="true"
+            android:foregroundServiceType="mediaPlayback"/>
     </application>
 
 </manifest>
