@@ -301,6 +301,37 @@ public class SyncReceiverService extends Service {
         return START_STICKY;
     }
 
+    /**
+     * Se llama cuando el usuario cierra SmartTube "de verdad" (la
+     * desliza fuera de la lista de apps recientes) — no cuando
+     * simplemente sale al inicio (Home) del launcher, donde la
+     * tarea sigue viva y este método NO se dispara.
+     *
+     * Antes no existía este override: al deslizar la app, Android
+     * nunca le avisaba nada al servicio y quedaba escuchando
+     * conexiones en segundo plano indefinidamente. Ahora se detiene
+     * de una — mismo comportamiento que ya tiene el controller del
+     * celular.
+     *
+     * OJO: a diferencia del controller, este servicio es el que
+     * ESCUCHA en la TV para poder recibir sincronización. Con este
+     * cambio, si deslizás SmartTube fuera de recientes en la TV, el
+     * receptor deja de responder hasta que abras la app de nuevo —
+     * si preferís que la TV quede siempre lista para recibir
+     * aunque hayas cerrado la app de esa forma, avisame y lo saco.
+     */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+
+        Log.d(
+                TAG,
+                "YG Sync: onTaskRemoved() — cerrando servicio"
+        );
+
+        stopSelf();
+    }
+
     @Override
     public void onDestroy() {
 
