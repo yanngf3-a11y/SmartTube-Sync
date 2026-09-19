@@ -84,14 +84,31 @@ public class SyncDiscoveryServer {
 
         try {
 
+            /*
+             * IMPORTANTE: setReuseAddress(true) solo tiene efecto
+             * si se llama ANTES del bind(). El constructor
+             * DatagramSocket(port, address) hace el bind de
+             * inmediato, así que llamar setReuseAddress() después
+             * (como estaba antes) no servía de nada. Por eso, si el
+             * proceso anterior de SmartTube quedaba vivo un
+             * instante de más (o el sistema no liberaba el puerto
+             * al toque), el bind fallaba con "Address already in
+             * use" y el descubrimiento UDP quedaba muerto hasta
+             * reiniciar la TV.
+             */
             socket =
-                    new DatagramSocket(
-                            DEFAULT_PORT,
-                            InetAddress.getByName("0.0.0.0")
-                    );
+                    new DatagramSocket(null);
+
+            socket.setReuseAddress(true);
+
+            socket.bind(
+                    new java.net.InetSocketAddress(
+                            InetAddress.getByName("0.0.0.0"),
+                            DEFAULT_PORT
+                    )
+            );
 
             socket.setBroadcast(true);
-            socket.setReuseAddress(true);
 
             byte[] buffer =
                     new byte[1024];

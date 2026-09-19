@@ -572,6 +572,24 @@ public class SyncReceiverService extends Service {
                     @Override
                     public void run() {
 
+                        /*
+                         * Antes esto no se revisaba acá: el
+                         * recordatorio seguía mostrando el código
+                         * las 10 veces sin importar que el usuario
+                         * ya hubiera emparejado el Controller en el
+                         * medio. Ahora, en cada tick, si ya hay al
+                         * menos un controlador emparejado, se corta
+                         * de una.
+                         */
+                        if (
+                                SyncPairingManager
+                                        .hasAnyPairedController(
+                                                getApplicationContext()
+                                        )
+                        ) {
+                            return;
+                        }
+
                         if (
                                 mPairingReminderShown
                                         >= PAIRING_REMINDER_COUNT

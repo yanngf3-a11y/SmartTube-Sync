@@ -368,6 +368,19 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
         });
     }
 
+    /*
+     * Cuántas veces reintentamos playAt() si la vista del
+     * reproductor todavía no está lista, y cada cuánto. 20 x 150ms
+     * = 3 segundos de margen extra antes de rendirnos. Antes, si
+     * view() daba null en el instante exacto de playAt() (algo
+     * lento en esa TV, openVideo() todavía en transición), la
+     * pantalla quedaba congelada para siempre: se abandonaba en
+     * silencio y nadie lo volvía a intentar.
+     */
+    private static final int PLAY_AT_MAX_RETRIES = 20;
+
+    private static final long PLAY_AT_RETRY_DELAY_MS = 150L;
+
     @Override
     public void playAt(
             long timestampMs
@@ -388,36 +401,136 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
         );
 
         mMainHandler.postDelayed(
-                () -> {
-
-                    try {
-
-                        PlaybackView v =
-                                view();
-
-                        if (v != null) {
-
-                            v.setPlayWhenReady(
-                                    true
-                            );
-
-                            Log.d(
-                                    TAG,
-                                    "YG SYNC PLAY_AT: arrancó"
-                            );
-                        }
-
-                    } catch (Exception e) {
-
-                        Log.e(
-                                TAG,
-                                "Error en playAt()",
-                                e
-                        );
-                    }
-                },
+                () -> attemptPlayAt(0),
                 delayMs
         );
+    }
+
+    private void attemptPlayAt(
+            int attempt
+    ) {
+
+        try {
+
+            PlaybackView v =
+                    view();
+
+            if (v != null) {
+
+                v.setPlayWhenReady(
+                        true
+                );
+
+                Log.d(
+                        TAG,
+                        "YG SYNC PLAY_AT: arrancó (intento "
+                                + attempt
+                                + ")"
+                );
+
+                return;
+            }
+
+            if (attempt < PLAY_AT_MAX_RETRIES) {
+
+                Log.d(
+                        TAG,
+                        "YG SYNC PLAY_AT: vista no lista, "
+                                + "reintento "
+                                + (attempt + 1)
+                                + "/"
+                                + PLAY_AT_MAX_RETRIES
+                );
+
+                mMainHandler.postDelayed(
+                        () -> attemptPlayAt(attempt + 1),
+                        PLAY_AT_RETRY_DELAY_MS
+                );
+
+            } else {
+
+                Log.e(
+                        TAG,
+                        "YG SYNC PLAY_AT: se agotaron los "
+                                + "reintentos, la pantalla puede "
+                                + "haber quedado congelada"
+                );
+            }
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Error en playAt()",
+                    e
+            );
+        }
+    }
+
+    @Override
+    public boolean isReadyToPlay(
+            String videoId
+    ) {
+
+        try {
+
+            if (
+                    videoId == null ||
+                    videoId.trim().isEmpty()
+            ) {
+                return false;
+            }
+
+            String current =
+                    getVideoId();
+
+            if (
+                    current == null ||
+                    !current.trim().equals(
+                            videoId.trim()
+                    )
+            ) {
+                return false;
+            }
+
+            PlaybackView v =
+                    view();
+
+            if (v == null) {
+                return false;
+            }
+
+            /*
+             * No alcanza con que el ID coincida: hay que
+             * esperar a que el motor termine de cargar
+             * (isLoading() == false) y realmente tenga medios
+             * cargados. Antes "ready" se mandaba apenas
+             * coincidía el videoId, que pasa casi al instante
+             * y mucho antes de que el video pueda arrancar sin
+             * cortes — eso era la causa real de que unas TVs
+             * arrancaran 1-2 segundos antes que otras aunque
+             * "playAt" les llegara al mismo tiempo a todas.
+             */
+            if (!v.isEngineInitialized()) {
+                return false;
+            }
+
+            if (v.isLoading()) {
+                return false;
+            }
+
+            return v.containsMedia();
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Error en isReadyToPlay()",
+                    e
+            );
+
+            return false;
+        }
     }
 
     @Override

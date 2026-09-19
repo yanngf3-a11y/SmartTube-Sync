@@ -40,7 +40,17 @@ package com.liskovsoft.smartyoutubetv2.tv.sync;
    * real exactamente a esa hora.
    */
   void playAt(long timestampMs);
-  
+
+  /**
+   * True solo si el motor de reproducción terminó de cargar
+   * "videoId" y ya no está bufereando (no alcanza con que haya
+   * aceptado el ID: eso pasa casi al instante, mucho antes de que
+   * el video pueda arrancar sin cortes). Se usa para decidir
+   * cuándo mandar "ready" al Controller, en vez de mandarlo apenas
+   * se acepta el comando.
+   */
+  boolean isReadyToPlay(String videoId);
+
   void next();
   
   void previous();

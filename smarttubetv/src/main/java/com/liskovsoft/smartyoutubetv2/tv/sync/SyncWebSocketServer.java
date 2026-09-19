@@ -554,19 +554,25 @@ public class SyncWebSocketServer extends WebSocketServer {
 
                         try {
 
-                            String currentVideoId =
-                                    mPlayerBridge.getVideoId();
-
                             /*
-                             * SmartTube ya cambió al video solicitado.
+                             * Antes esto solo comparaba el videoId
+                             * actual contra el pedido, y eso pasa
+                             * casi al instante (mucho antes de que
+                             * el video esté realmente bufereado).
+                             * Por eso "ready" llegaba demasiado
+                             * temprano y, si esa TV tardaba más en
+                             * cargar, terminaba arrancando 1-2
+                             * segundos tarde aunque "playAt" le
+                             * llegara al mismo tiempo que a las
+                             * demás. Ahora esperamos a que el motor
+                             * realmente termine de cargar.
                              */
-                            if (
-                                    currentVideoId != null
-                                            &&
-                                    expectedVideoId.equals(
-                                            currentVideoId.trim()
-                                    )
-                            ) {
+                            boolean ready =
+                                    mPlayerBridge.isReadyToPlay(
+                                            expectedVideoId
+                                    );
+
+                            if (ready) {
 
                                 Log.d(
                                         TAG,
