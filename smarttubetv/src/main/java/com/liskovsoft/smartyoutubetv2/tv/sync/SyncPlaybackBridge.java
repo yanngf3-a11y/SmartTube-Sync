@@ -635,6 +635,45 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
     }
 
     @Override
+    public void setSpeed(
+            float speed
+    ) {
+
+        final float safeSpeed =
+                Math.max(
+                        0.85f,
+                        Math.min(
+                                1.15f,
+                                speed
+                        )
+                );
+
+        mMainHandler.post(() -> {
+
+            try {
+
+                PlaybackView v =
+                        view();
+
+                if (v != null) {
+
+                    v.setSpeed(
+                            safeSpeed
+                    );
+                }
+
+            } catch (Exception e) {
+
+                Log.e(
+                        TAG,
+                        "Error en setSpeed()",
+                        e
+                );
+            }
+        });
+    }
+
+    @Override
     public long getPositionMs() {
 
         try {
@@ -835,14 +874,44 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                                             + videoId
                                             + " sigue trabado tras "
                                             + STALL_MAX_RETRIES
-                                            + " reintentos, me rindo"
+                                            + " reintentos, salto al"
+                                            + " siguiente"
                             );
 
                             showDiagnostic(
                                     "YG SYNC — VIDEO TRABADO, "
-                                            + "SIN MÁS REINTENTOS: "
+                                            + "SALTANDO AL "
+                                            + "SIGUIENTE: "
                                             + videoId
                             );
+
+                            /*
+                             * Reintentar el mismo openVideo() ya no
+                             * sirve: si después de 5 intentos sigue
+                             * sin arrancar, lo más probable es que
+                             * ESE video puntual tenga un problema
+                             * en esta TV (no de red/timing). Antes
+                             * acá nos rendíamos en silencio y la
+                             * pantalla quedaba trabada para
+                             * siempre. Saltar al siguiente evita
+                             * que esa TV se quede colgada
+                             * indefinidamente.
+                             */
+                            try {
+
+                                presenter()
+                                        .onNextClicked();
+
+                            } catch (Exception skipError) {
+
+                                Log.e(
+                                        TAG,
+                                        "Error saltando al "
+                                                + "siguiente tras "
+                                                + "video trabado",
+                                        skipError
+                                );
+                            }
 
                             return;
                         }

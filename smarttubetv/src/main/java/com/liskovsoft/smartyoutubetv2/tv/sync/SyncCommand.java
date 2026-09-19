@@ -155,6 +155,39 @@ public final class SyncCommand {
                     break;
                 }
 
+                case "setSpeed": {
+
+                    /*
+                     * Corrección "suave" de drift: en vez de un
+                     * seek (que siempre genera un corte/recongelado
+                     * visible), se acelera o frena levemente la
+                     * reproducción (ej. 1.03x / 0.97x) hasta que la
+                     * pantalla se empareja sola con la referencia,
+                     * y después se vuelve a 1.0x. El Controller
+                     * decide cuándo usar esto en vez de "sync".
+                     */
+                    float speed =
+                            (float) message.payload.optDouble(
+                                    "speed",
+                                    1.0
+                            );
+
+                    speed =
+                            Math.max(
+                                    0.85f,
+                                    Math.min(
+                                            1.15f,
+                                            speed
+                                    )
+                            );
+
+                    player.setSpeed(
+                            speed
+                    );
+
+                    break;
+                }
+
                 case "sync": {
 
                     long targetPositionMs =

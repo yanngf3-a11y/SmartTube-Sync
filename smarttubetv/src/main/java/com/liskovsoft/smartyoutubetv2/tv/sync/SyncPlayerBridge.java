@@ -56,6 +56,13 @@ package com.liskovsoft.smartyoutubetv2.tv.sync;
   void previous();
   
   void setVolume(float volume);
+
+  /**
+   * Corrección suave de drift: ajusta la velocidad de reproducción
+   * (ej. 0.97x a 1.03x) sin cortar el video, a diferencia de un
+   * seek. 1.0f = velocidad normal.
+   */
+  void setSpeed(float speed);
   
   long getPositionMs();
   
