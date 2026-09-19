@@ -269,6 +269,20 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                         "================================"
                 );
 
+                /*
+                 * Vigilancia por si el video se queda "cargando"
+                 * para siempre en esta TV puntual (pasaba en una
+                 * pantalla específica: terminaba quedando trabada
+                 * y había que cerrar y reabrir el Controller para
+                 * que reaccionara). Si sigue sin destrabarse sola,
+                 * esto reintenta el openVideo() por su cuenta.
+                 */
+                scheduleStallWatchdog(
+                        cleanVideoId,
+                        0,
+                        0
+                );
+
             } catch (Exception e) {
 
                 Log.e(
@@ -354,6 +368,12 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                         TAG,
                         "YG SYNC PREPARE: video cargado en pausa "
                                 + cleanVideoId
+                );
+
+                scheduleStallWatchdog(
+                        cleanVideoId,
+                        0,
+                        0
                 );
 
             } catch (Exception e) {
@@ -727,4 +747,166 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
             return 0.0f;
         }
     }
-                            }
+
+    /**
+     * Cuántas veces revisamos si el video sigue "cargando" antes
+     * de reintentar, cada cuánto, y cuántos reintentos totales
+     * dejamos hacer antes de rendirnos del todo para ese video
+     * (para no quedar reintentando para siempre si de verdad hay
+     * un problema de red más de fondo).
+     */
+    private static final long STALL_CHECK_INTERVAL_MS = 3000L;
+
+    private static final int STALL_CHECKS_BEFORE_RETRY = 4; // 4 x 3s = 12s
+
+    private static final int STALL_MAX_RETRIES = 5;
+
+    /**
+     * Vigila que el video pedido no se quede "cargando" para
+     * siempre. Antes, si eso pasaba en una TV puntual (red más
+     * lenta, algo raro del momento), la pantalla quedaba trabada
+     * hasta que el usuario cerraba y volvía a abrir el Controller
+     * a mano. Ahora, si después de 12 segundos sigue sin destrabar
+     * solo, se reintenta el openVideo() automáticamente (hasta
+     * STALL_MAX_RETRIES veces).
+     */
+    private void scheduleStallWatchdog(
+            String videoId,
+            int checkCount,
+            int retryCount
+    ) {
+
+        mMainHandler.postDelayed(
+                () -> {
+
+                    try {
+
+                        /*
+                         * Mientras tanto se pidió otro video: este
+                         * watchdog quedó obsoleto, no hacemos nada.
+                         */
+                        if (
+                                mRequestedVideoId == null ||
+                                !mRequestedVideoId.equals(
+                                        videoId
+                                )
+                        ) {
+                            return;
+                        }
+
+                        PlaybackView v =
+                                view();
+
+                        boolean stillStuck =
+                                v == null ||
+                                v.isLoading() ||
+                                !v.containsMedia();
+
+                        if (!stillStuck) {
+                            /*
+                             * Se destrabó solo, no hace falta
+                             * nada más.
+                             */
+                            return;
+                        }
+
+                        if (
+                                checkCount
+                                        < STALL_CHECKS_BEFORE_RETRY
+                        ) {
+
+                            scheduleStallWatchdog(
+                                    videoId,
+                                    checkCount + 1,
+                                    retryCount
+                            );
+
+                            return;
+                        }
+
+                        if (
+                                retryCount
+                                        >= STALL_MAX_RETRIES
+                        ) {
+
+                            Log.e(
+                                    TAG,
+                                    "YG SYNC: video "
+                                            + videoId
+                                            + " sigue trabado tras "
+                                            + STALL_MAX_RETRIES
+                                            + " reintentos, me rindo"
+                            );
+
+                            showDiagnostic(
+                                    "YG SYNC — VIDEO TRABADO, "
+                                            + "SIN MÁS REINTENTOS: "
+                                            + videoId
+                            );
+
+                            return;
+                        }
+
+                        Log.e(
+                                TAG,
+                                "YG SYNC: video "
+                                        + videoId
+                                        + " sigue cargando, "
+                                        + "reintentando openVideo() ("
+                                        + (retryCount + 1)
+                                        + "/"
+                                        + STALL_MAX_RETRIES
+                                        + ")"
+                        );
+
+                        showDiagnostic(
+                                "YG SYNC — VIDEO TRABADO, "
+                                        + "REINTENTANDO: "
+                                        + videoId
+                        );
+
+                        presenter().openVideo(
+                                videoId
+                        );
+
+                        scheduleStallWatchdog(
+                                videoId,
+                                0,
+                                retryCount + 1
+                        );
+
+                    } catch (Exception e) {
+
+                        Log.e(
+                                TAG,
+                                "Error en scheduleStallWatchdog()",
+                                e
+                        );
+                    }
+                },
+                STALL_CHECK_INTERVAL_MS
+        );
+    }
+
+    private void showDiagnostic(
+            String message
+    ) {
+
+        try {
+
+            android.widget.Toast.makeText(
+                    mContext,
+                    message,
+                    android.widget.Toast.LENGTH_LONG
+            ).show();
+
+        } catch (Exception e) {
+
+            Log.e(
+                    TAG,
+                    "Error mostrando diagnóstico: "
+                            + e.getMessage()
+            );
+        }
+    }
+}
