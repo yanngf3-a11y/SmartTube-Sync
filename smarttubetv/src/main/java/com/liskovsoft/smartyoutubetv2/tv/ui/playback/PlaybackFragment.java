@@ -1074,8 +1074,18 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
                                 return null;
                             }
 
+<<<<<<< HEAD
                             MediaMetadataCompat.Builder metadataBuilder =
                                     new MediaMetadataCompat.Builder();
+=======
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, getVideo().videoId);
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, getVideo().getTitleFull());
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, getVideo().getTitleFull());
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, getVideo().getAuthor());
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, Helpers.toString(getVideo().getSecondTitleFull()));
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, getVideo().getCardImageUrl());
+            metadataBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, getDurationMs());
+>>>>>>> upstream/master
 
                             metadataBuilder.putString(
                                     MediaMetadataCompat.METADATA_KEY_TITLE,
