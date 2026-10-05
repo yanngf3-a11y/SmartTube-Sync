@@ -40,8 +40,11 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean gamepadTriggerPressed = false;
 
     private PlaybackFragment mPlaybackFragment;
+<<<<<<< HEAD
 
     private boolean mIsBackPressed;
+=======
+>>>>>>> upstream/master
 
     /**
      * NOTE: Neither the TCP command server nor the UDP discovery server
@@ -360,6 +363,7 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onPause();
     }
 
+<<<<<<< HEAD
     @Override
     public void onBackPressed() {
 
@@ -376,6 +380,8 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onResume();
     }
 
+=======
+>>>>>>> upstream/master
     @SuppressWarnings("deprecation")
     private void enterBackgroundPlayMode() {
 
@@ -444,6 +450,7 @@ public class PlaybackActivity extends LeanbackActivity {
 
         // Check that user not open dialog/search activity instead of really leaving the activity
         // Activity may be overlapped by the dialog, back is pressed or new view started
+<<<<<<< HEAD
         // Activity may be overlapped by the dialog, back is pressed or new view started
         if (
                 mIsBackPressed
@@ -452,6 +459,9 @@ public class PlaybackActivity extends LeanbackActivity {
                         || getGeneralData().getBackgroundPlaybackShortcut()
                         == GeneralData.BACKGROUND_PLAYBACK_SHORTCUT_BACK
         ) {
+=======
+        if (isBackPressed() || isFinishing() || getViewManager().isNewViewPending() || getGeneralData().getBackgroundPlaybackShortcut() == GeneralData.BACKGROUND_PLAYBACK_SHORTCUT_BACK) {
+>>>>>>> upstream/master
             return;
         }
 
@@ -517,11 +527,15 @@ public class PlaybackActivity extends LeanbackActivity {
     }
 
     private boolean skipPip() {
+<<<<<<< HEAD
 
         return mIsBackPressed
                 && getGeneralData()
                 .getBackgroundPlaybackShortcut()
                 == GeneralData.BACKGROUND_PLAYBACK_SHORTCUT_HOME;
+=======
+        return isBackPressed() && getGeneralData().getBackgroundPlaybackShortcut() == GeneralData.BACKGROUND_PLAYBACK_SHORTCUT_HOME;
+>>>>>>> upstream/master
     }
 
     private boolean isEngineBlocked() {
