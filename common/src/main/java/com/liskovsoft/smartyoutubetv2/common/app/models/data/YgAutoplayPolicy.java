@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
 import io.reactivex.disposables.Disposable;
 
 /**
- * YG SYNC - Autoplay por GÉNERO (mismo ritmo), sin mixes y sin repetir artista.
+ * YG SYNC - Autoplay por GÉNERO (mismo ritmo), SOLO MÚSICA, sin mixes y sin repetir artista.
  *
  * Cuando una canción llega desde el control (YG Sync Control) y no hay nada
  * más programado, SmartTube normalmente sigue con el "siguiente" de YouTube,
@@ -38,6 +38,8 @@ import io.reactivex.disposables.Disposable;
  *  - de OTRO artista (nunca el de la canción que programaste, y evita los
  *    últimos artistas reproducidos),
  *  - que NO sea un mix, enganchado, playlist, álbum completo ni video de horas,
+ *  - que sea MÚSICA de verdad: nunca programas de TV, series, películas, capítulos,
+ *    entrevistas, noticias, etc. (ver isMusic / NOT_MUSIC_TITLE / TV_AUTHOR),
  *  - que no se haya reproducido ya en esta cadena.
  *
  * REGLA DE ORO: jamás se devuelve el "siguiente" original de YouTube (el mix).
@@ -69,7 +71,7 @@ public final class YgAutoplayPolicy {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     private static final String[] SEARCH_SUFFIXES = {
-            "video oficial", "canciones", "clasicos", "audio oficial", "exitos", "temas", "nuevas"
+            "video oficial", "audio oficial", "cancion", "letra", "lyric video", "musica", "cancion romantica"
     };
 
     /** Títulos que delatan mixes / compilaciones (se evalúa sobre texto normalizado). */
@@ -89,6 +91,31 @@ public final class YgAutoplayPolicy {
     /** Etiqueta (badge) que YouTube pone a mixes, playlists y álbumes. */
     private static final Pattern BAD_BADGE = Pattern.compile(
             "\\b(mix|playlist|lista|album|videos?)\\b");
+
+    /**
+     * Títulos que delatan que NO es música (series, programas de TV, películas,
+     * capítulos, entrevistas, noticias, etc.). Se evalúa sobre texto normalizado.
+     */
+    private static final Pattern NOT_MUSIC_TITLE = Pattern.compile(
+            "\\b(capitulo|capitulos|cap \\d+|episodio|episodios|episode|episodes|ep \\d+|"
+                    + "temporada|temporadas|season|seasons|serie|series|pelicula|peliculas|movie|movies|"
+                    + "film|full movie|trailer|teaser|avance|entrevista|interview|noticias|noticiero|"
+                    + "news|reaccion|reaccionando|reaction|react|review|resena|gameplay|tutorial|"
+                    + "podcast|programa|programas|telenovela|documental|documentary|stand up|comedia|"
+                    + "sketch|escena|escenas|scene|scenes|resumen|recap|discurso|sermon|predica|"
+                    + "audiolibro|audiobook|como hacer|how to|unboxing|vlog|parte \\d+|part \\d+)\\b");
+
+    /** Canales de televisión / cine / streaming (no son artistas ni sellos musicales). */
+    private static final Pattern TV_AUTHOR = Pattern.compile(
+            "\\b(netflix|hbo|disney|televisa|telemundo|univision|caracol tv|rcn|cnn|espn|"
+                    + "tv azteca|telecinco|antena 3|nickelodeon|cartoon network|discovery|"
+                    + "prime video|paramount pictures|sony pictures|universal pictures|warner bros)\\b");
+
+    /** Señales FUERTES de que es una canción (video oficial, audio oficial, letra, remix...). */
+    private static final Pattern MUSIC_TITLE = Pattern.compile(
+            "\\b(official music video|official video|video oficial|videoclip|video clip|"
+                    + "official audio|audio oficial|lyric video|official lyric|lyrics|letra|"
+                    + "visualizer|video musical|music video|remix|acustico|acoustic|unplugged)\\b");
 
     /** Palabras de relleno que se ignoran al comparar nombres de canciones. */
     private static final Pattern SONG_NOISE = Pattern.compile(
@@ -468,6 +495,20 @@ public final class YgAutoplayPolicy {
             return false;
         }
 
+        // SOLO MÚSICA: nada de programas de TV, series, películas, capítulos, etc.
+        if (NOT_MUSIC_TITLE.matcher(title).find()) {
+            return false;
+        }
+
+        String authorNorm = norm(item.getAuthor());
+        if (TV_AUTHOR.matcher(authorNorm).find() && !authorNorm.contains("music")) {
+            return false;
+        }
+
+        if (!isMusic(rawTitle, title, item.getAuthor(), d)) {
+            return false;
+        }
+
         // No repetir la misma canción (aunque venga de otro canal o subida).
         String song = songKey(rawTitle);
         if (song != null && sPlayedSongs.contains(song)) {
@@ -503,6 +544,46 @@ public final class YgAutoplayPolicy {
         }
 
         return true;
+    }
+
+    /**
+     * ¿Parece una canción? Debe tener al menos una señal musical:
+     *  - FUERTE: canal "- Topic" o VEVO, "video oficial", "audio oficial", letra, remix,
+     *    o un artista conocido de la lista.
+     *  - DÉBIL: formato "Artista - Canción" con duración conocida de canción, o una palabra
+     *    del género de la cadena en el título/canal.
+     * Si la duración es desconocida, solo se acepta con una señal FUERTE.
+     */
+    private static boolean isMusic(String rawTitle, String normTitle, String author, long durationMs) {
+        String authorNorm = norm(author);
+        String padded = " " + normTitle + " " + normArtist(author) + " ";
+
+        boolean strong = authorNorm.endsWith(" topic")
+                || authorNorm.contains("vevo")
+                || MUSIC_TITLE.matcher(normTitle).find();
+
+        if (!strong) {
+            for (String known : ARTISTS.keySet()) {
+                if (padded.contains(" " + known + " ")) {
+                    strong = true;
+                    break;
+                }
+            }
+        }
+
+        if (strong) {
+            return true;
+        }
+
+        if (durationMs <= 0) {
+            return false;
+        }
+
+        if (leftArtistRaw(rawTitle) != null && durationMs <= 9L * 60L * 1000L) {
+            return true;
+        }
+
+        return sGenreKey != null && matchesGenre(normTitle + " " + normArtist(author));
     }
 
     private static boolean matchesGenre(String text) {
