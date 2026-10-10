@@ -11,6 +11,8 @@ import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 import org.json.JSONObject;
 
+import com.liskovsoft.smartyoutubetv2.common.app.models.data.YgAutoplayPolicy;
+
 import java.net.InetSocketAddress;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -1228,6 +1230,20 @@ public class SyncWebSocketServer extends WebSocketServer {
                     "success",
                     true
             );
+
+            // Lista automática (próximas canciones) para que el controller la muestre.
+            try {
+                payload.put(
+                        "upcoming",
+                        YgAutoplayPolicy.getUpcomingJson(videoId)
+                );
+            } catch (Exception e) {
+                Log.e(
+                        TAG,
+                        "YG Sync: error agregando lista automatica",
+                        e
+                );
+            }
 
             JSONObject status =
                     new JSONObject();
