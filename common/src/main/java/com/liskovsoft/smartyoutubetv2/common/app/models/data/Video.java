@@ -848,6 +848,12 @@ public final class Video {
             return null;
         }
 
+        // YG SYNC: autoplay por genero (sin mixes, sin repetir artista).
+        // Solo actua en la cadena iniciada por una orden de YG Sync.
+        if (YgAutoplayPolicy.appliesTo(this)) {
+            return YgAutoplayPolicy.chooseNext(this, metadata);
+        }
+
         MediaItem nextVideo = metadata.getNextVideo();
 
         // BUGFIX: player closed after last video from the remote queue
