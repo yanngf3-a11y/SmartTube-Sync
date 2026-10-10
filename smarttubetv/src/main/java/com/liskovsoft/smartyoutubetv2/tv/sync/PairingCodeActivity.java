@@ -35,6 +35,13 @@ public class PairingCodeActivity extends Activity {
 
     private static final long AUTO_CLOSE_MS = 10_000L;
 
+    /** Si se abre desde el icono del launcher, queda visible más tiempo. */
+    private static final long AUTO_CLOSE_MANUAL_MS = 60_000L;
+
+    private static final long REFRESH_MS = 1_000L;
+
+    private TextView mCodeView;
+
     private final Handler mHandler =
             new Handler(Looper.getMainLooper());
 
@@ -50,12 +57,23 @@ public class PairingCodeActivity extends Activity {
                         EXTRA_CODE
                 );
 
+        // Abierta desde el icono del launcher: no trae código, se lee el actual.
+        final boolean manual =
+                code == null ||
+                code.trim().isEmpty();
+
+        if (manual) {
+            code =
+                    SyncPairingManager.getCurrentCode(
+                            getApplicationContext()
+                    );
+        }
+
         if (
                 code == null ||
                 code.trim().isEmpty()
         ) {
-            finish();
-            return;
+            code = "------";
         }
 
         setContentView(
@@ -64,10 +82,48 @@ public class PairingCodeActivity extends Activity {
                 )
         );
 
+        if (manual) {
+            // El servicio genera un código nuevo al arrancar; se vuelve a leer
+            // cada segundo para mostrar siempre el vigente.
+            mHandler.postDelayed(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            refreshCode();
+                            mHandler.postDelayed(
+                                    this,
+                                    REFRESH_MS
+                            );
+                        }
+                    },
+                    REFRESH_MS
+            );
+        }
+
         mHandler.postDelayed(
                 this::finish,
-                AUTO_CLOSE_MS
+                manual ? AUTO_CLOSE_MANUAL_MS : AUTO_CLOSE_MS
         );
+    }
+
+    private void refreshCode() {
+
+        String current =
+                SyncPairingManager.getCurrentCode(
+                        getApplicationContext()
+                );
+
+        if (
+                mCodeView != null &&
+                current != null &&
+                !current.trim().isEmpty()
+        ) {
+            mCodeView.setText(
+                    formatCode(
+                            current.trim()
+                    )
+            );
+        }
     }
 
     private FrameLayout buildContentView(
@@ -190,6 +246,8 @@ public class PairingCodeActivity extends Activity {
 
         codeView.setTextSize(52f);
         codeView.setGravity(Gravity.CENTER);
+
+        mCodeView = codeView;
 
         card.addView(title);
         card.addView(subtitle, subtitleParams);
