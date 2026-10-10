@@ -82,7 +82,7 @@ public class PairingCodeActivity extends Activity {
                 )
         );
 
-        if (manual) {
+        {
             // El servicio genera un código nuevo al arrancar; se vuelve a leer
             // cada segundo para mostrar siempre el vigente.
             mHandler.postDelayed(
