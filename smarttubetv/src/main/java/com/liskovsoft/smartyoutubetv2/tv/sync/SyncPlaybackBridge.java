@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import com.liskovsoft.smartyoutubetv2.common.app.models.data.YgAutoplayPolicy;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.PlaybackPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.PlaybackView;
 
@@ -225,6 +226,8 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
                                 + ")"
                 );
 
+                YgAutoplayPolicy.onSyncOpen(cleanVideoId);
+
                 p.openVideo(
                         cleanVideoId
                 );
@@ -343,6 +346,8 @@ public class SyncPlaybackBridge implements SyncPlayerBridge {
 
                 PlaybackPresenter p =
                         presenter();
+
+                YgAutoplayPolicy.onSyncOpen(cleanVideoId);
 
                 p.openVideo(
                         cleanVideoId
