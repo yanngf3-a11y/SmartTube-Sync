@@ -24,6 +24,9 @@ import java.util.Random;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import io.reactivex.disposables.Disposable;
 
 /**
@@ -62,6 +65,9 @@ public final class YgAutoplayPolicy {
     private static final int MAX_DECISIONS = 20;
     private static final int MAX_SEARCH_ATTEMPTS = 6;
     private static final int PICK_POOL = 6;
+
+    /** Cuántas canciones próximas se planean (y se muestran en el controller). */
+    private static final int UPCOMING_SIZE = 5;
 
     /** Duración razonable de una canción (descarta shorts y compilaciones largas). */
     private static final long MIN_DURATION_MS = 90L * 1000L;
@@ -241,6 +247,8 @@ public final class YgAutoplayPolicy {
     private static final LinkedList<String> sRecentArtists = new LinkedList<>();
     private static final Map<String, MediaItem> sDecisions = new LinkedHashMap<>();
     private static List<MediaItem> sFallbackCandidates = new ArrayList<>();
+    /** Lista planeada de próximas canciones (la primera es la que sigue). */
+    private static final LinkedList<MediaItem> sUpcoming = new LinkedList<>();
     private static String sCurrentId;
     private static String sLastChosenId;
     private static String sSearchingForId;
@@ -289,6 +297,7 @@ public final class YgAutoplayPolicy {
         sPlayedSongs.clear();
         sRecentArtists.clear();
         sDecisions.clear();
+        sUpcoming.clear();
         sFallbackCandidates = new ArrayList<>();
         sCurrentId = null;
         sLastChosenId = null;
@@ -364,9 +373,12 @@ public final class YgAutoplayPolicy {
         markPlayed(id, title);
         noteArtists(artistKeys(title, author));
 
-        MediaItem pick;
+        MediaItem pick = takeFromUpcoming(id);
 
-        if (sGenreKey != null) {
+        if (pick != null) {
+            // Se respeta la lista ya planeada (la misma que ve el controller).
+            Log.d(TAG, "Siguiente tomado de la lista planeada");
+        } else if (sGenreKey != null) {
             // 1) Del género, de otro artista, sin repetir los últimos.
             pick = select(candidates, true, true, false);
             // 2) Del género, permitiendo repetir un artista reciente (nunca el semilla).
@@ -406,8 +418,168 @@ public final class YgAutoplayPolicy {
             Log.d(TAG, "Sin candidato valido por ahora (genero=" + sGenreKey + ")");
         }
 
+        // Se actualiza la lista de próximas canciones (el 1.º es el siguiente).
+        rebuildUpcoming(pick, candidates);
+
         // Jamás se devuelve metadata.getNextVideo() (el mix de YouTube).
         return pick;
+    }
+
+    // ------------------------------------------------------------------
+    // Lista de próximas canciones (para mostrar en el controller)
+    // ------------------------------------------------------------------
+
+    /**
+     * JSON con las próximas canciones planeadas, para el "status" que el TV
+     * le manda al controller. Vacío si la política no está activa para el
+     * video que suena ahora. Nunca incluye el video que ya está sonando.
+     */
+    public static synchronized JSONArray getUpcomingJson(String currentVideoId) {
+        JSONArray arr = new JSONArray();
+
+        if (currentVideoId == null || currentVideoId.isEmpty()) {
+            return arr;
+        }
+
+        if (!isActive(System.currentTimeMillis()) || !sChain.contains(currentVideoId)) {
+            return arr;
+        }
+
+        for (MediaItem item : sUpcoming) {
+            if (item == null) {
+                continue;
+            }
+
+            String vid = item.getVideoId();
+            if (vid == null || vid.isEmpty() || vid.equals(currentVideoId)) {
+                continue;
+            }
+
+            try {
+                String t = item.getTitle();
+                String a = item.getAuthor();
+
+                JSONObject o = new JSONObject();
+                o.put("videoId", vid);
+                o.put("title", t == null ? "" : t);
+                o.put("author", a == null ? "" : a);
+                o.put("durationMs", item.getDurationMs());
+                arr.put(o);
+            } catch (Exception e) {
+                Log.e(TAG, "No se pudo armar la lista de proximas", e);
+            }
+        }
+
+        return arr;
+    }
+
+    /**
+     * Toma de la lista planeada el siguiente válido (descartando lo que ya
+     * está sonando). Lo que queda en la lista se revalida al reconstruirla.
+     */
+    private static MediaItem takeFromUpcoming(String currentId) {
+        List<MediaItem> old = new ArrayList<>(sUpcoming);
+        sUpcoming.clear();
+
+        MediaItem found = null;
+
+        for (MediaItem item : old) {
+            if (item == null) {
+                continue;
+            }
+
+            String vid = item.getVideoId();
+            if (vid == null || vid.equals(currentId)) {
+                continue;
+            }
+
+            if (found == null) {
+                if (passes(item, false, false, false)) {
+                    found = item;
+                }
+            } else {
+                sUpcoming.add(item);
+            }
+        }
+
+        return found;
+    }
+
+    /**
+     * Rearma la lista: primero "head" (lo que sigue), luego lo que ya estaba
+     * planeado si sigue siendo válido, y se completa con los relacionados
+     * (solo música, de otros artistas, sin repetir artista dentro de la lista).
+     */
+    private static void rebuildUpcoming(MediaItem head, List<MediaItem> candidates) {
+        if (head == null) {
+            sUpcoming.clear();
+            return;
+        }
+
+        List<MediaItem> keep = new ArrayList<>();
+        Set<String> usedIds = new HashSet<>();
+        Set<String> usedArtists = new HashSet<>();
+
+        keep.add(head);
+        if (head.getVideoId() != null) {
+            usedIds.add(head.getVideoId());
+        }
+        usedArtists.addAll(artistKeys(head.getTitle(), head.getAuthor()));
+
+        // Lo que ya estaba planeado (ya se había validado).
+        for (MediaItem old : new ArrayList<>(sUpcoming)) {
+            if (keep.size() >= UPCOMING_SIZE) {
+                break;
+            }
+            if (canQueue(old, false, usedIds, usedArtists)) {
+                keep.add(old);
+            }
+        }
+
+        // Se completa con los relacionados de la canción actual.
+        if (candidates != null) {
+            boolean requireGenre = sGenreKey != null;
+
+            for (MediaItem item : candidates) {
+                if (keep.size() >= UPCOMING_SIZE) {
+                    break;
+                }
+                if (canQueue(item, requireGenre, usedIds, usedArtists)) {
+                    keep.add(item);
+                }
+            }
+        }
+
+        sUpcoming.clear();
+        sUpcoming.addAll(keep);
+    }
+
+    /** Valida un candidato para la lista y, si sirve, reserva su id y artistas. */
+    private static boolean canQueue(MediaItem item, boolean requireGenre,
+                                    Set<String> usedIds, Set<String> usedArtists) {
+        if (item == null) {
+            return false;
+        }
+
+        String vid = item.getVideoId();
+        if (vid == null || vid.isEmpty() || usedIds.contains(vid)) {
+            return false;
+        }
+
+        if (!passes(item, requireGenre, true, false)) {
+            return false;
+        }
+
+        Set<String> keys = artistKeys(item.getTitle(), item.getAuthor());
+        for (String key : keys) {
+            if (usedArtists.contains(key)) {
+                return false;
+            }
+        }
+
+        usedIds.add(vid);
+        usedArtists.addAll(keys);
+        return true;
     }
 
     // ------------------------------------------------------------------
@@ -870,6 +1042,9 @@ public final class YgAutoplayPolicy {
 
         remember(forVideoId, clean);
         sSearchingForId = null;
+
+        sUpcoming.clear();
+        rebuildUpcoming(clean, sFallbackCandidates);
 
         Log.d(TAG, "Siguiente por genero: " + clean.getTitle() + " [" + clean.getAuthor() + "]");
 
