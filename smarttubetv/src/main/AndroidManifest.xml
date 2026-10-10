@@ -199,14 +199,31 @@
             android:screenOrientation="unspecified"
             android:theme="@style/App.Theme.Leanback.Preferences"/>
 
+        <!--
+            YG Sync: ademas de abrirse sola la primera vez, esta ventana tiene su
+            propio icono en el launcher de la TV ("Codigo YG Sync") para poder ver
+            el codigo de emparejamiento cuando se necesite.
+        -->
         <activity
             android:name="com.liskovsoft.smartyoutubetv2.tv.sync.PairingCodeActivity"
+            android:label="Código YG Sync"
+            android:icon="@mipmap/app_icon"
+            android:banner="@mipmap/app_banner"
+            android:exported="true"
             android:noHistory="true"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|layoutDirection"
             android:screenOrientation="unspecified"
-            android:theme="@style/App.Theme.Leanback.Preferences"/>
+            android:theme="@style/App.Theme.Leanback.Preferences">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
+            </intent-filter>
+        </activity>
 
         <!-- Android 8 fallback -->
 
