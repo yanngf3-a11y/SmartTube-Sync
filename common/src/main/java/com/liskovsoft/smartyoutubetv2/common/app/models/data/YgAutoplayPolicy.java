@@ -13,6 +13,7 @@ import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -60,11 +61,11 @@ public final class YgAutoplayPolicy {
     /** Si pasan más horas que esto SIN actividad, la política se apaga. */
     private static final long ACTIVE_WINDOW_MS = 8L * 60L * 60L * 1000L;
 
-    private static final int MAX_PLAYED = 120;
+    private static final int MAX_PLAYED = 400;
     private static final int MAX_RECENT_ARTISTS = 8;
     private static final int MAX_DECISIONS = 20;
     private static final int MAX_SEARCH_ATTEMPTS = 6;
-    private static final int PICK_POOL = 6;
+    private static final int PICK_POOL = 8;
 
     /** Cuántas canciones próximas se planean (y se muestran en el controller). */
     private static final int UPCOMING_SIZE = 5;
@@ -109,7 +110,7 @@ public final class YgAutoplayPolicy {
                     + "news|reaccion|reaccionando|reaction|react|review|resena|gameplay|tutorial|"
                     + "podcast|programa|programas|telenovela|documental|documentary|stand up|comedia|"
                     + "sketch|escena|escenas|scene|scenes|resumen|recap|discurso|sermon|predica|"
-                    + "audiolibro|audiobook|como hacer|how to|unboxing|vlog|parte \\d+|part \\d+)\\b");
+                    + "audiolibro|audiobook|como hacer|how to|unboxing|vlog|en vivo|live|directo|en directo|concierto|concert|tiny desk|festival|premios|presentacion|unplugged|slowed|reverb|sped up|nightcore|8d|bass boosted|cover|covers|instrumental|pista|tributo|homenaje|parte \\d+|part \\d+)\\b");
 
     /** Canales de televisión / cine / streaming (no son artistas ni sellos musicales). */
     private static final Pattern TV_AUTHOR = Pattern.compile(
@@ -121,7 +122,12 @@ public final class YgAutoplayPolicy {
     private static final Pattern MUSIC_TITLE = Pattern.compile(
             "\\b(official music video|official video|video oficial|videoclip|video clip|"
                     + "official audio|audio oficial|lyric video|official lyric|lyrics|letra|"
-                    + "visualizer|video musical|music video|remix|acustico|acoustic|unplugged)\\b");
+                    + "visualizer|video musical|music video|remix|acustico|acoustic)\\b");
+
+    /** Versión de estudio oficial (mejor audio): se prefiere sobre el resto. */
+    private static final Pattern OFFICIAL_TITLE = Pattern.compile(
+            "\\b(official music video|official video|video oficial|official audio|"
+                    + "audio oficial|videoclip)\\b");
 
     /** Palabras de relleno que se ignoran al comparar nombres de canciones. */
     private static final Pattern SONG_NOISE = Pattern.compile(
@@ -293,8 +299,8 @@ public final class YgAutoplayPolicy {
         sGenreKey = null;
         sSeedArtists.clear();
         sChain.clear();
-        sPlayed.clear();
-        sPlayedSongs.clear();
+        // sPlayed / sPlayedSongs NO se borran: así no se repiten las mismas
+        // canciones cada vez que arranca una cadena nueva.
         sRecentArtists.clear();
         sDecisions.clear();
         sUpcoming.clear();
@@ -408,6 +414,18 @@ public final class YgAutoplayPolicy {
             if (pick == null) {
                 pick = select(candidates, false, false, true);
             }
+        }
+
+        if (pick == null && sSearchingForId == null && sPlayed.size() > 40) {
+            // Se agotaron las canciones nuevas: se olvida lo más viejo del
+            // historial (queda lo último escuchado) y se reintenta una vez.
+            while (sPlayed.size() > 30) {
+                sPlayed.removeFirst();
+            }
+            while (sPlayedSongs.size() > 30) {
+                sPlayedSongs.removeFirst();
+            }
+            pick = select(candidates, false, false, false);
         }
 
         if (pick != null) {
@@ -540,7 +558,7 @@ public final class YgAutoplayPolicy {
         if (candidates != null) {
             boolean requireGenre = sGenreKey != null;
 
-            for (MediaItem item : candidates) {
+            for (MediaItem item : ranked(candidates)) {
                 if (keep.size() >= UPCOMING_SIZE) {
                     break;
                 }
@@ -583,6 +601,47 @@ public final class YgAutoplayPolicy {
     }
 
     // ------------------------------------------------------------------
+    // Calidad y variedad
+    // ------------------------------------------------------------------
+
+    /** Más puntos = más probable que sea la versión de estudio oficial. */
+    private static int quality(MediaItem item) {
+        String author = norm(item.getAuthor());
+        String title = norm(item.getTitle());
+        int q = 0;
+
+        if (author.endsWith(" topic") || author.contains("vevo")) {
+            q += 3;
+        }
+
+        if (OFFICIAL_TITLE.matcher(title).find()) {
+            q += 3;
+        } else if (MUSIC_TITLE.matcher(title).find()) {
+            q += 1;
+        }
+
+        return q;
+    }
+
+    /** Mezcla al azar y deja primero lo de mejor calidad (empates al azar). */
+    private static List<MediaItem> ranked(List<MediaItem> items) {
+        List<MediaItem> list = new ArrayList<>();
+
+        if (items != null) {
+            for (MediaItem item : items) {
+                if (item != null) {
+                    list.add(item);
+                }
+            }
+        }
+
+        Collections.shuffle(list, RANDOM);
+        Collections.sort(list, (x, y) -> quality(y) - quality(x));
+
+        return list;
+    }
+
+    // ------------------------------------------------------------------
     // Selección
     // ------------------------------------------------------------------
 
@@ -599,7 +658,7 @@ public final class YgAutoplayPolicy {
 
         List<MediaItem> ok = new ArrayList<>();
 
-        for (MediaItem item : items) {
+        for (MediaItem item : ranked(items)) {
             if (passes(item, requireGenre, checkRecent, allowPlaylistItems)) {
                 ok.add(item);
                 if (ok.size() >= PICK_POOL) {
